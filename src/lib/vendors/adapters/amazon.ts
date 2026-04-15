@@ -110,7 +110,12 @@ export class AmazonAdapter extends BaseVendorAdapter {
       return `<base href="${baseHref}">\n${cardsHtml}`;
     } catch (err) {
       logger.error(
-        { vendor: this.config.slug, error: err },
+        {
+          vendor: this.config.slug,
+          err,
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        },
         "Amazon Playwright error"
       );
       try {
