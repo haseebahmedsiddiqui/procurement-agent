@@ -1,0 +1,11 @@
+node_modules
+.next
+.env*
+*.session.json
+sessions/
+exports/
+backups/
+.git
+.DS_Store
+coverage/
+*.tsbuildinfo
