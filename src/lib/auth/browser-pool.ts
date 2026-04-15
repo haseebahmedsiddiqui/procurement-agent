@@ -28,11 +28,18 @@ class BrowserPool {
       return this.launching;
     }
 
+    const headlessEnv = process.env.PLAYWRIGHT_HEADLESS;
+    const headless =
+      headlessEnv !== undefined
+        ? headlessEnv !== "false" && headlessEnv !== "0"
+        : !process.env.DISPLAY;
+
     this.launching = chromium.launch({
-      headless: false, // Visible for manual login flows
+      headless,
       args: [
         "--disable-blink-features=AutomationControlled",
         "--no-sandbox",
+        "--disable-dev-shm-usage",
       ],
     });
 
