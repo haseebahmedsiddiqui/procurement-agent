@@ -53,7 +53,7 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
   const currentIdx = STEPS.findIndex((s) => s.key === currentStep);
 
   return (
-    <div className="flex items-center gap-0">
+    <div className="flex items-center rounded-xl border border-border/60 bg-card p-1.5 shadow-sm">
       {STEPS.map((s, i) => {
         const isComplete = i < currentIdx;
         const isCurrent = i === currentIdx;
@@ -62,19 +62,24 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
         return (
           <div key={s.key} className="flex items-center">
             {i > 0 && (
-              <div className="relative h-0.5 w-8 sm:w-12 bg-border mx-1">
+              <div className="relative h-px w-6 sm:w-10 bg-border mx-0.5">
                 {i <= currentIdx && (
-                  <div className="absolute inset-0 bg-primary animate-stepper-fill" />
+                  <div className="absolute inset-0 bg-primary/40 animate-stepper-fill" />
                 )}
               </div>
             )}
-            <div className="flex items-center gap-1.5">
+            <div
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-1.5 transition-all duration-300",
+                isCurrent && "bg-primary/[0.08]",
+              )}
+            >
               <div
                 className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300",
-                  isComplete && "border-primary bg-primary text-primary-foreground",
-                  isCurrent && "border-primary bg-primary/10 text-primary",
-                  !isComplete && !isCurrent && "border-border text-muted-foreground"
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-all duration-300",
+                  isComplete && "bg-primary text-primary-foreground shadow-sm shadow-primary/25",
+                  isCurrent && "bg-primary/15 text-primary",
+                  !isComplete && !isCurrent && "bg-muted text-muted-foreground"
                 )}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -497,17 +502,17 @@ export default function HomePage() {
   const allSelectedSlugs = Object.values(selectedVendors).flat();
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-8">
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Price Comparison</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight">Price Comparison</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Upload an RFQ to compare prices across maritime suppliers
           </p>
         </div>
         {step !== "upload" && (
-          <Button variant="outline" size="sm" onClick={handleReset} className="gap-1.5">
+          <Button variant="outline" size="sm" onClick={handleReset} className="gap-2 rounded-lg shadow-sm">
             <RotateCcw className="h-3.5 w-3.5" />
             Start Over
           </Button>
@@ -522,18 +527,18 @@ export default function HomePage() {
 
       {/* Step 2: Store Picker */}
       {step === "pick-stores" && uploadData && (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* Upload summary */}
-          <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <Upload className="h-4 w-4 text-primary" />
+          <div className="flex items-center gap-3.5 rounded-xl border border-border/60 bg-card px-5 py-3.5 shadow-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+              <Upload className="h-4.5 w-4.5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{uploadData.filename}</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <Badge variant="secondary" className="text-[10px]">{uploadData.format}</Badge>
-                <Badge variant="secondary" className="text-[10px]">{uploadData.totalItems} items</Badge>
-                <Badge variant="secondary" className="text-[10px]">
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant="secondary" className="text-[10px] rounded-md">{uploadData.format}</Badge>
+                <Badge variant="secondary" className="text-[10px] rounded-md">{uploadData.totalItems} items</Badge>
+                <Badge variant="secondary" className="text-[10px] rounded-md">
                   {Math.round(uploadData.detection.overallConfidence * 100)}% confidence
                 </Badge>
               </div>
@@ -553,19 +558,19 @@ export default function HomePage() {
 
       {/* Step 3: Normalizing */}
       {step === "normalizing" && (
-        <Card>
-          <CardContent className="flex h-56 items-center justify-center">
-            <div className="text-center space-y-4">
-              <div className="relative mx-auto h-14 w-14">
-                <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
-                <div className="absolute inset-0 rounded-full border-2 border-primary animate-pulse-ring" />
+        <Card className="border-border/60 shadow-sm">
+          <CardContent className="flex h-64 items-center justify-center">
+            <div className="text-center space-y-5">
+              <div className="relative mx-auto h-16 w-16">
+                <div className="absolute inset-0 rounded-2xl border-2 border-primary/15" />
+                <div className="absolute inset-0 rounded-2xl border-2 border-primary/50 animate-pulse-ring" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <Sparkles className="h-6 w-6 text-primary" />
+                  <Sparkles className="h-7 w-7 text-primary" />
                 </div>
               </div>
               <div>
-                <p className="font-medium">Normalizing items...</p>
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="font-semibold text-[15px]">Normalizing items...</p>
+                <p className="text-sm text-muted-foreground mt-1.5">
                   AI is generating optimized search queries for {allSelectedSlugs.length} vendor{allSelectedSlugs.length !== 1 ? "s" : ""}
                 </p>
               </div>
@@ -576,19 +581,19 @@ export default function HomePage() {
 
       {/* Step 4: Review */}
       {step === "review" && uploadData && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <ClipboardCheck className="h-4 w-4 text-primary" />
+        <div className="space-y-5">
+          <div className="flex items-center gap-3.5 rounded-xl border border-border/60 bg-card px-5 py-3.5 shadow-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+              <ClipboardCheck className="h-4.5 w-4.5 text-primary" />
             </div>
             <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium">{uploadData.filename}</span>
-              <Badge variant="secondary" className="text-[10px]">{uploadData.totalItems} items</Badge>
-              <Badge variant="secondary" className="text-[10px]">
+              <Badge variant="secondary" className="text-[10px] rounded-md">{uploadData.totalItems} items</Badge>
+              <Badge variant="secondary" className="text-[10px] rounded-md">
                 {allSelectedSlugs.length} store{allSelectedSlugs.length !== 1 ? "s" : ""}
               </Badge>
               {normalizedItems.length > 0 && (
-                <Badge className="bg-emerald-500/15 text-emerald-700 text-[10px]">
+                <Badge className="bg-emerald-500/10 text-emerald-700 border border-emerald-200 text-[10px] rounded-md">
                   Normalized
                 </Badge>
               )}
@@ -596,8 +601,8 @@ export default function HomePage() {
           </div>
 
           {normalizeError && (
-            <div className="rounded-lg bg-amber-500/10 border border-amber-200 p-4">
-              <p className="text-sm text-amber-700">
+            <div className="rounded-xl bg-amber-50 border border-amber-200/80 p-4">
+              <p className="text-sm text-amber-800 font-medium">
                 Normalization skipped: {normalizeError}
               </p>
               <p className="text-xs text-amber-600 mt-1">
@@ -619,10 +624,10 @@ export default function HomePage() {
           />
 
           <div className="flex justify-end gap-3">
-            <Button variant="outline" size="sm" onClick={() => setStep("pick-stores")}>
+            <Button variant="outline" size="sm" onClick={() => setStep("pick-stores")} className="rounded-lg">
               Change Stores
             </Button>
-            <Button onClick={handleSearch} className="gap-1.5">
+            <Button onClick={handleSearch} className="gap-2 rounded-lg shadow-sm shadow-primary/25">
               <Search className="h-4 w-4" />
               Search {allSelectedSlugs.length} Vendor{allSelectedSlugs.length !== 1 ? "s" : ""}
             </Button>
@@ -632,27 +637,27 @@ export default function HomePage() {
 
       {/* Step 5: Searching — live log feed with cancel */}
       {step === "searching" && (
-        <div className="space-y-4">
-          <Card>
+        <div className="space-y-5">
+          <Card className="border-border/60 shadow-sm overflow-hidden">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="relative h-8 w-8">
-                    <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
-                    <div className="absolute inset-0 rounded-full border-2 border-primary animate-pulse-ring" />
+                <div className="flex items-center gap-3.5">
+                  <div className="relative h-9 w-9">
+                    <div className="absolute inset-0 rounded-xl border-2 border-primary/15" />
+                    <div className="absolute inset-0 rounded-xl border-2 border-primary/50 animate-pulse-ring" />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <Search className="h-3.5 w-3.5 text-primary" />
+                      <Search className="h-4 w-4 text-primary" />
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Searching vendors...</p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-sm font-semibold">Searching vendors...</p>
+                    <div className="flex items-center gap-2 mt-1">
                       {searchProgress && (
-                        <Badge variant="secondary" className="text-[10px]">
+                        <Badge variant="secondary" className="text-[10px] rounded-md font-mono tabular-nums">
                           {searchProgress.completed} / {searchProgress.total}
                         </Badge>
                       )}
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge variant="outline" className="text-[10px] rounded-md">
                         {Object.values(searchResults).flat().filter((r) => r.productName).length} matches
                       </Badge>
                     </div>
@@ -662,16 +667,16 @@ export default function HomePage() {
                   variant="destructive"
                   size="sm"
                   onClick={handleCancelSearch}
+                  className="rounded-lg"
                 >
                   Cancel
                 </Button>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 pt-0">
-              {/* Progress bar */}
               {searchProgress && searchProgress.total > 0 && (
-                <div className="space-y-1.5">
-                  <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                <div className="space-y-2">
+                  <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
                     <div
                       className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
                       style={{
@@ -681,7 +686,7 @@ export default function HomePage() {
                   </div>
                   {searchProgress.currentItem && (
                     <p className="text-xs text-muted-foreground truncate">
-                      <span className="font-medium">{searchProgress.currentVendor}</span>
+                      <span className="font-medium text-foreground">{searchProgress.currentVendor}</span>
                       {" — "}
                       {searchProgress.currentItem}
                     </p>

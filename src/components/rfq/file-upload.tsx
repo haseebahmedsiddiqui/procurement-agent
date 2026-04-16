@@ -95,15 +95,15 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
   );
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="border-border/60 shadow-sm overflow-hidden">
       <CardContent className="p-0">
         <div
           className={cn(
-            "relative flex flex-col items-center justify-center py-16 px-6 transition-all duration-200 cursor-pointer",
-            "border-2 border-dashed rounded-[inherit] m-3",
+            "relative flex flex-col items-center justify-center py-20 px-6 transition-all duration-300 cursor-pointer",
+            "border-2 border-dashed rounded-[inherit] m-4",
             dragActive
-              ? "border-primary bg-primary/5 scale-[1.01]"
-              : "border-border hover:border-primary/40 hover:bg-accent/50",
+              ? "border-primary bg-primary/[0.04] scale-[1.005]"
+              : "border-border/80 hover:border-primary/40 hover:bg-accent/30",
             uploading && "pointer-events-none opacity-70"
           )}
           onDragOver={(e) => {
@@ -119,41 +119,39 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
           }}
         >
           {uploading ? (
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-                  <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                </div>
+            <div className="flex flex-col items-center gap-5">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+                <Loader2 className="h-8 w-8 text-primary animate-spin" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-medium">Processing RFQ...</p>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-[15px] font-semibold">Processing RFQ...</p>
+                <p className="text-sm text-muted-foreground mt-1.5">
                   Parsing Excel and detecting category
                 </p>
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-4">
+            <div className="flex flex-col items-center gap-5">
               <div className={cn(
-                "flex h-16 w-16 items-center justify-center rounded-2xl transition-colors",
-                dragActive ? "bg-primary/15" : "bg-primary/10"
+                "flex h-16 w-16 items-center justify-center rounded-2xl transition-all duration-300",
+                dragActive ? "bg-primary/15 scale-110" : "bg-primary/[0.07]"
               )}>
                 {dragActive ? (
                   <FileSpreadsheet className="h-8 w-8 text-primary" />
                 ) : (
-                  <Upload className="h-8 w-8 text-primary" />
+                  <Upload className="h-8 w-8 text-primary/70" />
                 )}
               </div>
               <div className="text-center">
-                <p className="text-sm font-medium">
+                <p className="text-[15px] font-semibold">
                   {dragActive ? "Drop your file here" : "Drag & drop your RFQ file"}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-sm text-muted-foreground mt-1.5">
                   Supports Excel (.xlsx) files — AI will detect category and suggest vendors
                 </p>
               </div>
               <label className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                <span className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/90">
+                <span className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-md hover:shadow-primary/30">
                   Browse Files
                 </span>
                 <input
@@ -169,8 +167,8 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
         </div>
 
         {error && (
-          <div className="mx-3 mb-3 rounded-lg bg-destructive/10 border border-destructive/20 p-3">
-            <p className="text-sm text-destructive">{error}</p>
+          <div className="mx-4 mb-4 rounded-xl bg-destructive/[0.06] border border-destructive/15 p-4">
+            <p className="text-sm font-medium text-destructive">{error}</p>
           </div>
         )}
       </CardContent>

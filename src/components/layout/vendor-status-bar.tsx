@@ -27,15 +27,17 @@ export function VendorStatusBar() {
   const allReady = ready === total;
 
   return (
-    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <div className="flex items-center gap-2 rounded-full border border-border/60 bg-secondary/50 px-3 py-1.5">
       <span
         className={cn(
-          "h-2 w-2 rounded-full",
-          allReady ? "bg-green-500" : "bg-yellow-500"
+          "h-2 w-2 rounded-full ring-2",
+          allReady
+            ? "bg-emerald-500 ring-emerald-500/20"
+            : "bg-amber-500 ring-amber-500/20"
         )}
       />
-      <span>
-        {ready}/{total} vendors ready
+      <span className="text-xs font-medium text-muted-foreground">
+        {ready}/{total} vendors
       </span>
     </div>
   );

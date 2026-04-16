@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ClipboardCheck, Target } from "lucide-react";
+import { ClipboardCheck, Target, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NormalizedItem } from "@/lib/ai/item-normalizer";
 
@@ -86,7 +86,7 @@ function EditableCell({
           ref.current?.blur();
         }
       }}
-      className="w-full bg-transparent border border-transparent hover:border-input focus:border-primary focus:bg-background rounded px-2 py-1 text-xs font-mono outline-none transition-colors"
+      className="w-full bg-transparent border border-transparent hover:border-input focus:border-primary focus:bg-background rounded-md px-2 py-1.5 text-xs font-mono outline-none transition-all duration-200"
     />
   );
 }
@@ -103,18 +103,20 @@ export function ItemsTable({
   const isReviewMode = !!onUpdateOverride;
 
   return (
-    <Card>
+    <Card className="border-border/60 shadow-sm">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <ClipboardCheck className="h-4 w-4 text-primary" />
+        <CardTitle className="flex items-center gap-2.5 text-base">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+            <ClipboardCheck className="h-4 w-4 text-primary" />
+          </div>
           RFQ Items
-          <Badge variant="secondary" className="text-[10px]">
+          <Badge variant="secondary" className="text-[10px] rounded-md">
             {items.length} items
           </Badge>
         </CardTitle>
         {isReviewMode && (
-          <p className="text-xs text-muted-foreground pt-1">
-            <Target className="inline h-3 w-3 mr-1 text-primary" />
+          <p className="text-xs text-muted-foreground pt-1.5 flex items-center gap-1.5">
+            <Pencil className="inline h-3 w-3 text-primary" />
             Click any search query to edit it before searching. Adding a brand + part
             number overrides all vendor queries with an exact-match search.
           </p>
@@ -124,24 +126,24 @@ export function ItemsTable({
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="w-12">#</TableHead>
-                <TableHead className="min-w-[200px]">Description</TableHead>
-                <TableHead className="w-24">IMPA</TableHead>
-                <TableHead className="w-16 text-center">Qty</TableHead>
-                <TableHead className="w-16">Unit</TableHead>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="w-12 text-xs font-semibold">#</TableHead>
+                <TableHead className="min-w-[200px] text-xs font-semibold">Description</TableHead>
+                <TableHead className="w-24 text-xs font-semibold">IMPA</TableHead>
+                <TableHead className="w-16 text-center text-xs font-semibold">Qty</TableHead>
+                <TableHead className="w-16 text-xs font-semibold">Unit</TableHead>
                 {isReviewMode && (
                   <>
-                    <TableHead className="w-32 text-primary">Brand</TableHead>
-                    <TableHead className="w-32 text-primary">Part #</TableHead>
+                    <TableHead className="w-32 text-xs font-semibold text-primary">Brand</TableHead>
+                    <TableHead className="w-32 text-xs font-semibold text-primary">Part #</TableHead>
                   </>
                 )}
                 {normalized && (
-                  <TableHead>Normalized Name</TableHead>
+                  <TableHead className="text-xs font-semibold">Normalized Name</TableHead>
                 )}
                 {normalized &&
                   vendorSlugs?.map((slug) => (
-                    <TableHead key={slug} className="min-w-[140px]">
+                    <TableHead key={slug} className="min-w-[140px] text-xs font-semibold">
                       {slug}
                     </TableHead>
                   ))}
@@ -157,11 +159,11 @@ export function ItemsTable({
                   <TableRow
                     key={idx}
                     className={cn(
-                      "group",
-                      overrideQuery && "bg-primary/5"
+                      "group transition-colors",
+                      overrideQuery && "bg-primary/[0.03]"
                     )}
                   >
-                    <TableCell className="text-xs text-muted-foreground">
+                    <TableCell className="text-xs text-muted-foreground font-mono tabular-nums">
                       {item.lineNumber}
                     </TableCell>
                     <TableCell className="font-medium text-sm">
@@ -169,12 +171,12 @@ export function ItemsTable({
                     </TableCell>
                     <TableCell>
                       {item.impaCode && (
-                        <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                        <span className="font-mono text-[10px] bg-muted/60 px-2 py-0.5 rounded-md text-muted-foreground">
                           {item.impaCode}
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-center tabular-nums">
+                    <TableCell className="text-center tabular-nums font-mono text-sm">
                       {item.quantity}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">

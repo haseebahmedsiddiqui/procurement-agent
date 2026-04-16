@@ -42,9 +42,9 @@ interface StorePickerProps {
 }
 
 const confidenceColor = (c: number) => {
-  if (c >= 0.8) return "bg-emerald-500/15 text-emerald-700";
-  if (c >= 0.5) return "bg-amber-500/15 text-amber-700";
-  return "bg-red-500/15 text-red-700";
+  if (c >= 0.8) return "bg-emerald-500/10 text-emerald-700 border border-emerald-200/60";
+  if (c >= 0.5) return "bg-amber-500/10 text-amber-700 border border-amber-200/60";
+  return "bg-red-500/10 text-red-700 border border-red-200/60";
 };
 
 const STORAGE_KEY = "procurement-agent:store-picker-v1";
@@ -66,14 +66,14 @@ function saveStoredSelection(selection: Record<string, string[]>): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(selection));
   } catch {
-    // localStorage may be disabled — non-critical
+    // localStorage may be disabled
   }
 }
 
 const STRATEGY_LABELS: Record<string, { label: string; color: string }> = {
-  api: { label: "API", color: "bg-blue-500/15 text-blue-700" },
-  scrape: { label: "Scrape", color: "bg-amber-500/15 text-amber-700" },
-  playwright: { label: "Browser", color: "bg-purple-500/15 text-purple-700" },
+  api: { label: "API", color: "bg-blue-500/10 text-blue-700 border border-blue-200/60" },
+  scrape: { label: "Scrape", color: "bg-amber-500/10 text-amber-700 border border-amber-200/60" },
+  playwright: { label: "Browser", color: "bg-purple-500/10 text-purple-700 border border-purple-200/60" },
 };
 
 export function StorePicker({
@@ -144,13 +144,13 @@ export function StorePicker({
     return (
       <div key={group.category} className="space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <span className="text-lg">{catInfo?.icon}</span>
-            <span className="font-medium">{catInfo?.name}</span>
-            <Badge className={cn("text-[10px]", confidenceColor(group.confidence))}>
+            <span className="font-semibold text-[15px]">{catInfo?.name}</span>
+            <Badge className={cn("text-[10px] rounded-md", confidenceColor(group.confidence))}>
               {Math.round(group.confidence * 100)}% confidence
             </Badge>
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-[10px] rounded-md">
               {group.itemIndices.length} items
             </Badge>
           </div>
@@ -158,7 +158,7 @@ export function StorePicker({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs"
+              className="h-7 text-xs rounded-md"
               onClick={() => selectAll(group.category)}
             >
               All
@@ -166,7 +166,7 @@ export function StorePicker({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs"
+              className="h-7 text-xs rounded-md"
               onClick={() => selectNone(group.category)}
             >
               None
@@ -174,9 +174,9 @@ export function StorePicker({
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground">{group.reasoning}</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">{group.reasoning}</p>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           {catVendors.map((vendor) => {
             const isSelected = selectedForCat.includes(vendor.slug);
             const strategy = STRATEGY_LABELS[vendor.preferredStrategy] || {
@@ -188,10 +188,10 @@ export function StorePicker({
               <div
                 key={vendor.slug}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-all duration-150",
+                  "flex items-center gap-3.5 rounded-xl border p-3.5 cursor-pointer transition-all duration-200",
                   isSelected
-                    ? "border-primary bg-primary/5 shadow-sm"
-                    : "hover:bg-accent/50 hover:border-border"
+                    ? "border-primary/40 bg-primary/[0.04] shadow-sm"
+                    : "border-border/60 hover:bg-accent/40 hover:border-border"
                 )}
                 onClick={() => toggleVendor(group.category, vendor.slug)}
               >
@@ -201,22 +201,23 @@ export function StorePicker({
                   onCheckedChange={() =>
                     toggleVendor(group.category, vendor.slug)
                   }
+                  className="mt-0.5"
                 />
                 <div className="flex-1 min-w-0">
                   <Label className="cursor-pointer font-medium text-sm">
                     {vendor.name}
                   </Label>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Badge className={cn("text-[10px] h-4 px-1.5", strategy.color)}>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <Badge className={cn("text-[10px] h-[18px] px-1.5 rounded-md", strategy.color)}>
                       {strategy.label}
                     </Badge>
                     {vendor.authRequired ? (
-                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 gap-0.5">
+                      <Badge variant="outline" className="text-[10px] h-[18px] px-1.5 gap-0.5 rounded-md">
                         <Lock className="h-2.5 w-2.5" />
                         Auth
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 gap-0.5">
+                      <Badge variant="outline" className="text-[10px] h-[18px] px-1.5 gap-0.5 rounded-md">
                         <Globe className="h-2.5 w-2.5" />
                         Open
                       </Badge>
@@ -234,16 +235,18 @@ export function StorePicker({
   const totalSelected = Object.values(selected).flat().length;
 
   return (
-    <Card>
+    <Card className="border-border/60 shadow-sm">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Store className="h-4 w-4 text-primary" />
+        <CardTitle className="flex items-center gap-2.5 text-base">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+            <Store className="h-4 w-4 text-primary" />
+          </div>
           Select Stores
           {isMixed && (
-            <Badge variant="secondary" className="text-[10px]">Mixed RFQ</Badge>
+            <Badge variant="secondary" className="text-[10px] rounded-md">Mixed RFQ</Badge>
           )}
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="mt-1.5">
           {isMixed
             ? "This RFQ spans multiple categories. Select stores for each group."
             : "Choose which stores to search for price comparison."}
@@ -272,14 +275,14 @@ export function StorePicker({
           groups.map((group) => renderCategoryPicker(group))
         )}
 
-        <div className="flex items-center justify-between border-t pt-4">
+        <div className="flex items-center justify-between border-t pt-5">
           <p className="text-sm text-muted-foreground">
             {totalSelected} store{totalSelected !== 1 ? "s" : ""} selected
           </p>
           <Button
             onClick={() => onConfirm(selected)}
             disabled={totalSelected === 0}
-            className="gap-1.5"
+            className="gap-2 rounded-lg shadow-sm shadow-primary/25"
           >
             Continue
             <ArrowRight className="h-4 w-4" />
