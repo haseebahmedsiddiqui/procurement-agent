@@ -149,7 +149,7 @@ Respond with ONLY valid JSON:
   "bestMatchIndex": 0,
   "confidence": 0.85,
   "reasoning": "Brief explanation of why this is the best match",
-  "warnings": ["any concerns, e.g. 'pack size may differ', 'not marine-grade'"]
+  "warnings": ["any concerns, e.g. 'pack size may differ', 'verify color at purchase'"]
 }
 
 Confidence guide:
@@ -159,7 +159,30 @@ Confidence guide:
 - 0.3-0.5: Weak match (same category but significant differences)
 - 0.0-0.3: Poor match (wrong product or not relevant)
 
-If NO candidate is acceptable, set bestMatchIndex to -1 and confidence to 0.`;
+CRITICAL — how to score consumer-catalog listings (Amazon, WebstaurantStore, etc.):
+These catalogs sell to everyone, not just ships. Listings almost NEVER self-describe
+as "marine-grade", "workwear", "IMPA-compliant", "commercial-grade", or list every
+material/spec in the title. Do NOT treat absence of those labels as disqualifying.
+Apply common-sense matching: if the product TYPE, approximate SIZE, and COLOR can
+plausibly match the RFQ, accept it with appropriate confidence and put the
+uncertainties in "warnings" for the operator to review.
+
+Specific rules:
+- A listing with a SIZE RANGE (e.g. "Sizes S-4X", "30/32/34\\"", "6-qt to 12-qt")
+  that CONTAINS the requested size IS a size match — not a mismatch.
+- Missing explicit color/material/spec confirmation in the title → warning, NOT rejection.
+  The operator can verify at purchase.
+- Missing IMPA code in the listing is never a reason to reject — Amazon/consumer
+  catalogs don't carry IMPA metadata. IMPA is just the spec the operator wants;
+  a matching product on Amazon is still a matching product.
+- "Consumer-grade" vs "marine-grade" is NOT a rejection reason by itself for
+  commodity items (t-shirts, colanders, kettles, basic tools). Flag it as a
+  warning if relevant, not a 0-confidence reject.
+
+Only set bestMatchIndex to -1 and confidence to 0 when the candidate is a
+DIFFERENT PRODUCT TYPE entirely (e.g. asked for a bowl strainer, got a slotted
+spoon; asked for a frying pan, got a stockpot). Wrong color, unspecified material,
+and uncertified grade are warnings, not rejections.`;
 
   const client = getAIClient();
 
