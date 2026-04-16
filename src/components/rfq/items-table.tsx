@@ -39,6 +39,12 @@ interface ItemsTableProps {
     field: "brand" | "partNumber",
     value: string
   ) => void;
+  searchQueryOverrides?: Record<string, string>;
+  onUpdateSearchQuery?: (
+    itemIndex: number,
+    vendorSlug: string,
+    value: string
+  ) => void;
 }
 
 function buildOverrideQuery(o?: ItemOverride): string | null {
@@ -91,6 +97,8 @@ export function ItemsTable({
   vendorSlugs,
   overrides,
   onUpdateOverride,
+  searchQueryOverrides,
+  onUpdateSearchQuery,
 }: ItemsTableProps) {
   const isReviewMode = !!onUpdateOverride;
 
@@ -107,9 +115,8 @@ export function ItemsTable({
         {isReviewMode && (
           <p className="text-xs text-muted-foreground pt-1">
             <Target className="inline h-3 w-3 mr-1 text-primary" />
-            Adding a brand + part number for any row overrides the AI query with an
-            exact-match search across all vendors. Best for catalog items where you
-            already know the SKU.
+            Click any search query to edit it before searching. Adding a brand + part
+            number overrides all vendor queries with an exact-match search.
           </p>
         )}
       </CardHeader>
@@ -201,26 +208,47 @@ export function ItemsTable({
                       </TableCell>
                     )}
                     {normalized &&
-                      vendorSlugs?.map((slug) => (
-                        <TableCell
-                          key={slug}
-                          className={cn(
-                            "text-xs",
-                            overrideQuery
-                              ? "text-primary font-medium"
-                              : "text-muted-foreground"
-                          )}
-                        >
-                          {overrideQuery ? (
-                            <span className="inline-flex items-center gap-1">
-                              <Target className="h-3 w-3" />
-                              {overrideQuery}
-                            </span>
-                          ) : (
-                            (norm?.searchQueries[slug] as string) || "—"
-                          )}
-                        </TableCell>
-                      ))}
+                      vendorSlugs?.map((slug) => {
+                        const aiQuery = (norm?.searchQueries[slug] as string) || "";
+                        const overrideKey = `${idx}::${slug}`;
+                        const editedQuery = searchQueryOverrides?.[overrideKey];
+                        const displayQuery = overrideQuery || editedQuery || aiQuery;
+
+                        return (
+                          <TableCell
+                            key={slug}
+                            className={cn(
+                              "text-xs p-1",
+                              overrideQuery
+                                ? "text-primary font-medium"
+                                : editedQuery
+                                  ? "text-amber-700"
+                                  : "text-muted-foreground"
+                            )}
+                          >
+                            {overrideQuery ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1">
+                                <Target className="h-3 w-3" />
+                                {overrideQuery}
+                              </span>
+                            ) : isReviewMode && onUpdateSearchQuery ? (
+                              <EditableCell
+                                value={editedQuery || aiQuery}
+                                placeholder={aiQuery || "search query"}
+                                onCommit={(v) => {
+                                  if (v.trim() === aiQuery.trim()) {
+                                    onUpdateSearchQuery(idx, slug, "");
+                                  } else {
+                                    onUpdateSearchQuery(idx, slug, v);
+                                  }
+                                }}
+                              />
+                            ) : (
+                              displayQuery || "—"
+                            )}
+                          </TableCell>
+                        );
+                      })}
                   </TableRow>
                 );
               })}

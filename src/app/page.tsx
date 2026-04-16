@@ -106,6 +106,7 @@ export default function HomePage() {
   const [normalizedItems, setNormalizedItems] = useState<NormalizedItem[]>([]);
   const [normalizeError, setNormalizeError] = useState<string | null>(null);
   const [itemOverrides, setItemOverrides] = useState<Record<number, ItemOverride>>({});
+  const [searchQueryOverrides, setSearchQueryOverrides] = useState<Record<string, string>>({});
   const [searchResults, setSearchResults] = useState<Record<number, Array<{
     vendorSlug: string; productName?: string; productId?: string;
     productUrl?: string; price?: number; currency?: string;
@@ -360,13 +361,16 @@ export default function HomePage() {
         ? `${override.brand?.trim() ?? ""} ${override.partNumber.trim()}`.trim()
         : null;
 
-      // When the operator types a brand+part number, that becomes an exact-match
-      // search across every vendor — no LLM-generated fuzz, no vendor-specific
-      // qualifiers. Highest-precision path.
-      const searchQueries = overrideQuery
+      const baseQueries = overrideQuery
         ? Object.fromEntries(allSlugs.map((s) => [s, overrideQuery]))
         : norm?.searchQueries ||
           Object.fromEntries(allSlugs.map((s) => [s, item.description]));
+
+      const searchQueries = { ...baseQueries };
+      for (const slug of allSlugs) {
+        const edited = searchQueryOverrides[`${idx}::${slug}`];
+        if (edited) searchQueries[slug] = edited;
+      }
 
       return {
         index: idx,
@@ -437,7 +441,7 @@ export default function HomePage() {
     } finally {
       abortRef.current = null;
     }
-  }, [uploadData, selectedVendors, normalizedItems, itemOverrides, handleSearchEvent, appendLog]);
+  }, [uploadData, selectedVendors, normalizedItems, itemOverrides, searchQueryOverrides, handleSearchEvent, appendLog]);
 
   const handleCancelSearch = useCallback(() => {
     abortRef.current?.abort();
@@ -461,6 +465,22 @@ export default function HomePage() {
     []
   );
 
+  const handleSearchQueryOverride = useCallback(
+    (itemIndex: number, vendorSlug: string, value: string) => {
+      const key = `${itemIndex}::${vendorSlug}`;
+      setSearchQueryOverrides((prev) => {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          const { [key]: _removed, ...rest } = prev;
+          void _removed;
+          return rest;
+        }
+        return { ...prev, [key]: trimmed };
+      });
+    },
+    []
+  );
+
   const handleReset = () => {
     abortRef.current?.abort();
     setStep("upload");
@@ -468,6 +488,7 @@ export default function HomePage() {
     setNormalizedItems([]);
     setNormalizeError(null);
     setItemOverrides({});
+    setSearchQueryOverrides({});
     setSearchResults({});
     setSearchLogs([]);
     setSearchProgress(null);
@@ -593,6 +614,8 @@ export default function HomePage() {
             }
             overrides={itemOverrides}
             onUpdateOverride={handleOverrideChange}
+            searchQueryOverrides={searchQueryOverrides}
+            onUpdateSearchQuery={handleSearchQueryOverride}
           />
 
           <div className="flex justify-end gap-3">
