@@ -22,6 +22,15 @@ export async function GET(
       return NextResponse.json({ error: "RFQ not found" }, { status: 404 });
     }
 
+    const searchRuns = (rfq.searchRuns || []).map((run: Record<string, unknown>) => ({
+      id: String(run._id),
+      searchedAt: run.searchedAt,
+      vendorSlugs: run.vendorSlugs || [],
+      totalResults: run.totalResults || 0,
+      totalFailures: run.totalFailures || 0,
+      items: run.items || [],
+    }));
+
     return NextResponse.json({
       id: String(rfq._id),
       filename: rfq.filename,
@@ -31,6 +40,7 @@ export async function GET(
       categoryConfidence: rfq.categoryConfidence,
       selectedVendors: rfq.selectedVendors || [],
       status: rfq.status,
+      searchRuns,
     });
   } catch (err) {
     logger.error({ error: err }, "History fetch failed");

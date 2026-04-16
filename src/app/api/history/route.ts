@@ -33,6 +33,16 @@ export async function GET(request: NextRequest) {
           itemCount: {
             $cond: [{ $isArray: "$items" }, { $size: "$items" }, 0],
           },
+          searchRunCount: {
+            $cond: [{ $isArray: "$searchRuns" }, { $size: "$searchRuns" }, 0],
+          },
+          lastSearchRun: {
+            $cond: [
+              { $and: [{ $isArray: "$searchRuns" }, { $gt: [{ $size: "$searchRuns" }, 0] }] },
+              { $arrayElemAt: ["$searchRuns", -1] },
+              null,
+            ],
+          },
         },
       },
     ]);
@@ -46,6 +56,15 @@ export async function GET(request: NextRequest) {
       selectedVendors: r.selectedVendors || [],
       status: r.status,
       itemCount: r.itemCount || 0,
+      searchRunCount: r.searchRunCount || 0,
+      lastSearchRun: r.lastSearchRun
+        ? {
+            searchedAt: r.lastSearchRun.searchedAt,
+            totalResults: r.lastSearchRun.totalResults || 0,
+            totalFailures: r.lastSearchRun.totalFailures || 0,
+            vendorSlugs: r.lastSearchRun.vendorSlugs || [],
+          }
+        : null,
     }));
 
     return NextResponse.json({ rfqs: summary });

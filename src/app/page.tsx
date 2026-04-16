@@ -127,6 +127,8 @@ export default function HomePage() {
     currentItem?: string;
   } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const prevStepRef = useRef<Step>("upload");
+  const [resultsSaved, setResultsSaved] = useState(false);
 
   const handleUploadComplete = useCallback(async (data: UploadResult) => {
     setUploadData(data);
@@ -497,7 +499,31 @@ export default function HomePage() {
     setSearchResults({});
     setSearchLogs([]);
     setSearchProgress(null);
+    setResultsSaved(false);
   };
+
+  useEffect(() => {
+    const wasSearching = prevStepRef.current === "searching";
+    prevStepRef.current = step;
+
+    if (step === "results" && wasSearching && uploadData?.rfqId && !resultsSaved) {
+      setResultsSaved(true);
+      const allSlugs = Object.values(selectedVendors).flat();
+      fetch("/api/history/save-results", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rfqId: uploadData.rfqId,
+          vendorSlugs: allSlugs,
+          results: searchResults,
+          summary: {
+            totalResults: searchSummary.totalResults,
+            totalFailures: searchSummary.totalFailures,
+          },
+        }),
+      }).catch(() => {});
+    }
+  }, [step, uploadData, selectedVendors, searchResults, searchSummary, resultsSaved]);
 
   const allSelectedSlugs = Object.values(selectedVendors).flat();
 
