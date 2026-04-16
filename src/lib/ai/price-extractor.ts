@@ -3,24 +3,37 @@ import { getAIClient, MODELS } from "./client";
 import { recordAICost } from "./cost-tracker";
 import { logger } from "@/lib/logger";
 
-const ExtractedProductSchema = z.object({
-  productName: z.string(),
-  productId: z.string(),
-  productUrl: z.string(),
-  price: z.number(),
-  currency: z.string().default("USD"),
-  pricePerUnit: z.number().optional(),
-  inStock: z.boolean(),
-  deliveryEstimate: z.string().optional(),
-  imageUrl: z.string().optional(),
+// Lenient schema for raw LLM output — Amazon often returns null for price on
+// sponsored cards / out-of-stock items / "coming soon" placeholders. We accept
+// null here, then filter to complete products before returning.
+const RawExtractedProductSchema = z.object({
+  productName: z.string().nullable().optional(),
+  productId: z.string().nullable().optional(),
+  productUrl: z.string().nullable().optional(),
+  price: z.number().nullable().optional(),
+  currency: z.string().nullable().optional(),
+  pricePerUnit: z.number().nullable().optional(),
+  inStock: z.boolean().nullable().optional(),
+  deliveryEstimate: z.string().nullable().optional(),
+  imageUrl: z.string().nullable().optional(),
 });
 
-const ExtractionResultSchema = z.object({
-  products: z.array(ExtractedProductSchema),
+const RawExtractionResultSchema = z.object({
+  products: z.array(RawExtractedProductSchema).default([]),
   noResults: z.boolean().default(false),
 });
 
-export type ExtractedProduct = z.infer<typeof ExtractedProductSchema>;
+export interface ExtractedProduct {
+  productName: string;
+  productId: string;
+  productUrl: string;
+  price: number;
+  currency: string;
+  pricePerUnit?: number;
+  inStock: boolean;
+  deliveryEstimate?: string;
+  imageUrl?: string;
+}
 
 /**
  * Strip noise tags that bloat HTML without adding extractable signal.
@@ -50,9 +63,9 @@ export async function extractPricesFromHtml(
   // Strip noise (script/style/svg/comments) BEFORE truncating
   const cleaned = cleanHtml(html);
 
-  // 40k chars ≈ 10k tokens — well within Haiku's window and ~3x our prior budget.
-  // Adapters that pre-extract product cards (Amazon) usually fit comfortably under this.
-  const MAX_HTML_CHARS = 40000;
+  // 20k chars ≈ 5k tokens. Lower budget reduces 50K-tokens/min rate-limit hits
+  // when several vendor extractions run in parallel.
+  const MAX_HTML_CHARS = 20000;
   const truncatedHtml =
     cleaned.length > MAX_HTML_CHARS
       ? cleaned.slice(0, MAX_HTML_CHARS) + "\n... [truncated]"
@@ -112,16 +125,56 @@ If no products were found or the page shows an error/captcha, return:
 
   try {
     const parsed = JSON.parse(jsonMatch[0]);
-    const result = ExtractionResultSchema.parse(parsed);
+    const result = RawExtractionResultSchema.parse(parsed);
 
     if (result.noResults) {
       logger.info({ vendor: vendorSlug, query: searchQuery }, "No results found");
       return [];
     }
 
-    return result.products;
+    // Keep only products that have the bare minimum (name + price + URL).
+    // A sponsored card without a price is useless to procurement; dropping it
+    // is better than failing the whole extraction.
+    const valid: ExtractedProduct[] = [];
+    let dropped = 0;
+    for (const p of result.products) {
+      if (
+        p.productName &&
+        typeof p.price === "number" &&
+        p.productUrl
+      ) {
+        valid.push({
+          productName: p.productName,
+          productId: p.productId ?? "",
+          productUrl: p.productUrl,
+          price: p.price,
+          currency: p.currency ?? "USD",
+          pricePerUnit: p.pricePerUnit ?? undefined,
+          inStock: p.inStock ?? true,
+          deliveryEstimate: p.deliveryEstimate ?? undefined,
+          imageUrl: p.imageUrl ?? undefined,
+        });
+      } else {
+        dropped++;
+      }
+    }
+
+    if (dropped > 0) {
+      logger.info(
+        { vendor: vendorSlug, kept: valid.length, dropped },
+        "Filtered incomplete products from extraction"
+      );
+    }
+
+    return valid;
   } catch (err) {
-    logger.warn({ vendor: vendorSlug, error: err }, "Failed to parse extraction response");
+    logger.warn(
+      {
+        vendor: vendorSlug,
+        message: err instanceof Error ? err.message : String(err),
+      },
+      "Failed to parse extraction response"
+    );
     return [];
   }
 }
