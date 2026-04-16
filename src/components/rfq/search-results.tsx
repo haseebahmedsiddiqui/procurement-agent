@@ -79,16 +79,49 @@ export function SearchResults({
   summary,
 }: SearchResultsProps) {
   const [actions, setActions] = useState<Record<string, MatchAction>>({});
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [rejectingKey, setRejectingKey] = useState<string | null>(null);
+  const [reasonDraft, setReasonDraft] = useState("");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const setAction = (key: string, action: MatchAction) => {
     setActions((prev) => ({ ...prev, [key]: action }));
+    if (action === null) {
+      setReasons((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
     if (saveStatus !== "idle") {
       setSaveStatus("idle");
       setSaveMessage(null);
     }
+  };
+
+  const openRejectFor = (key: string) => {
+    setRejectingKey(key);
+    setReasonDraft(reasons[key] || "");
+  };
+
+  const cancelReject = () => {
+    setRejectingKey(null);
+    setReasonDraft("");
+  };
+
+  const commitReject = () => {
+    if (!rejectingKey) return;
+    const trimmed = reasonDraft.trim();
+    setReasons((prev) => ({ ...prev, [rejectingKey]: trimmed }));
+    setActions((prev) => ({ ...prev, [rejectingKey]: "rejected" }));
+    if (saveStatus !== "idle") {
+      setSaveStatus("idle");
+      setSaveMessage(null);
+    }
+    setRejectingKey(null);
+    setReasonDraft("");
   };
 
   const confirmedCount = Object.values(actions).filter((a) => a === "confirmed").length;
@@ -131,7 +164,8 @@ export function SearchResults({
         if (!vr.productId || !vr.productUrl) continue;
         matches.push(base);
       } else {
-        rejections.push(base);
+        const reason = reasons[key]?.trim();
+        rejections.push(reason ? { ...base, reason } : base);
       }
     }
 
@@ -396,7 +430,46 @@ export function SearchResults({
                               <p className="text-[10px] text-muted-foreground">
                                 {vr.productId} &middot; {vr.source} &middot; {vr.durationMs}ms
                               </p>
-                              {action === null || action === undefined ? (
+                              {rejectingKey === key ? (
+                                <div className="pt-0.5 space-y-1">
+                                  <textarea
+                                    autoFocus
+                                    value={reasonDraft}
+                                    placeholder="Why is this wrong? (optional — e.g. wrong size, not marine-grade)"
+                                    onChange={(e) => setReasonDraft(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                                        e.preventDefault();
+                                        commitReject();
+                                      } else if (e.key === "Escape") {
+                                        e.preventDefault();
+                                        cancelReject();
+                                      }
+                                    }}
+                                    rows={2}
+                                    className="w-full text-[11px] rounded border border-input bg-background px-2 py-1 outline-none focus:border-primary resize-none"
+                                  />
+                                  <div className="flex gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 text-[10px] px-2 gap-1 text-destructive"
+                                      onClick={commitReject}
+                                    >
+                                      <XCircle className="h-3 w-3" />
+                                      Reject
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 text-[10px] px-2"
+                                      onClick={cancelReject}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : action === null || action === undefined ? (
                                 <div className="flex gap-1 pt-0.5">
                                   <Button
                                     size="sm"
@@ -411,25 +484,37 @@ export function SearchResults({
                                     size="sm"
                                     variant="ghost"
                                     className="h-6 text-[10px] px-2 gap-1 text-destructive"
-                                    onClick={() => setAction(key, "rejected")}
+                                    onClick={() => openRejectFor(key)}
                                   >
                                     <XCircle className="h-3 w-3" />
                                     Reject
                                   </Button>
                                 </div>
                               ) : (
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    "text-[10px] cursor-pointer",
-                                    action === "confirmed"
-                                      ? "bg-primary/10 text-primary border-primary/30"
-                                      : "bg-destructive/10 text-destructive border-destructive/30"
+                                <div className="space-y-0.5">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "text-[10px] cursor-pointer",
+                                      action === "confirmed"
+                                        ? "bg-primary/10 text-primary border-primary/30"
+                                        : "bg-destructive/10 text-destructive border-destructive/30"
+                                    )}
+                                    onClick={() => setAction(key, null)}
+                                    title={
+                                      action === "rejected" && reasons[key]
+                                        ? `Reason: ${reasons[key]}`
+                                        : undefined
+                                    }
+                                  >
+                                    {action === "confirmed" ? "Confirmed" : "Rejected"} (undo)
+                                  </Badge>
+                                  {action === "rejected" && reasons[key] && (
+                                    <p className="text-[10px] text-muted-foreground italic line-clamp-2">
+                                      “{reasons[key]}”
+                                    </p>
                                   )}
-                                  onClick={() => setAction(key, null)}
-                                >
-                                  {action === "confirmed" ? "Confirmed" : "Rejected"} (undo)
-                                </Badge>
+                                </div>
                               )}
                             </div>
                           </TableCell>

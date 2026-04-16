@@ -4,6 +4,8 @@ import { getBreaker } from "./circuit-breaker";
 import { vendorSearchSemaphore } from "./concurrency";
 import { checkSlowness } from "./load-baselines";
 import { recordSearch } from "./metrics";
+import { connectDB } from "@/lib/db/connection";
+import { Vendor } from "@/lib/db/models/Vendor";
 import { logger } from "@/lib/logger";
 
 export interface ItemSearchRequest {
@@ -14,6 +16,12 @@ export interface ItemSearchRequest {
   quantity: number;
   unit: string;
   searchQueries: Record<string, string>; // vendorSlug -> query
+  /**
+   * Item's detected category (e.g. "stationery", "deck_engine", "galley_kitchen").
+   * When present, the search engine only queries vendors that belong to this
+   * category, so a stationery line doesn't get searched on amazon-deck.
+   */
+  category?: string;
 }
 
 export interface VendorItemResult {
@@ -63,7 +71,6 @@ export async function searchVendors(
   options: SearchVendorsOptions = {}
 ): Promise<VendorItemResult[]> {
   const { signal, onProgress, onResult } = options;
-  const total = items.length * vendorSlugs.length;
   let completed = 0;
 
   // Filter to vendors that have adapters
@@ -75,11 +82,52 @@ export async function searchVendors(
     return true;
   });
 
-  // Run each vendor's full item-list in parallel, limited by semaphore
+  // Look up each vendor's category so we can skip (item, vendor) pairs where
+  // the item's detected category doesn't match the vendor's category. This is
+  // why the seed has amazon / amazon-deck / amazon-galley as separate rows —
+  // so a stationery line never gets searched on amazon-deck with deck phrasing.
+  const vendorCategoryMap: Record<string, string | undefined> = {};
+  try {
+    await connectDB();
+    const vendorDocs = await Vendor.find({ slug: { $in: activeVendors } })
+      .select("slug category")
+      .lean();
+    for (const v of vendorDocs) {
+      vendorCategoryMap[v.slug as string] = v.category as string | undefined;
+    }
+  } catch (err) {
+    logger.warn({ error: err }, "Could not load vendor categories — category filter disabled");
+  }
+
+  const itemsForVendor = (vendorSlug: string): ItemSearchRequest[] => {
+    const vendorCategory = vendorCategoryMap[vendorSlug];
+    // If either the vendor or the item has no category info, fall back to the
+    // old "run everything" behavior so we never silently drop a search.
+    if (!vendorCategory) return items;
+    return items.filter(
+      (it) => !it.category || it.category === vendorCategory
+    );
+  };
+
+  // Total reflects only the pairs that will actually run
+  const total = activeVendors.reduce(
+    (sum, slug) => sum + itemsForVendor(slug).length,
+    0
+  );
+
+  // Run each vendor's filtered item-list in parallel, limited by semaphore
   const vendorRuns = activeVendors.map(async (vendorSlug) => {
     await vendorSearchSemaphore.acquire();
     try {
-      return await runVendorSearch(vendorSlug, items, activeVendors.length, total, signal, onProgress, onResult, () => completed++);
+      const filteredItems = itemsForVendor(vendorSlug);
+      const skipped = items.length - filteredItems.length;
+      if (skipped > 0) {
+        logger.info(
+          { vendor: vendorSlug, vendorCategory: vendorCategoryMap[vendorSlug], skipped, willSearch: filteredItems.length },
+          "Skipping items in other categories"
+        );
+      }
+      return await runVendorSearch(vendorSlug, filteredItems, activeVendors.length, total, signal, onProgress, onResult, () => completed++);
     } finally {
       vendorSearchSemaphore.release();
     }

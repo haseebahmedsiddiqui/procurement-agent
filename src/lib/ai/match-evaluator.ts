@@ -58,6 +58,7 @@ async function loadFewShots(
         rfqDescription: itemIdMap.get(String(f.itemId)) || "",
         productName: (f.originalMatch?.productName as string) || "",
         action: f.action as "confirmed" | "rejected" | "corrected",
+        reason: (f.reason as string | undefined) || undefined,
       }))
       .filter((f) => f.rfqDescription && f.productName);
   } catch (err) {

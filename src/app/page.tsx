@@ -343,6 +343,16 @@ export default function HomePage() {
 
     const allSlugs = Object.values(selectedVendors).flat();
 
+    // Flatten the category groups into a per-item category lookup so each
+    // searchItem carries its category. The search engine uses this to skip
+    // (item, vendor) pairs where categories don't match (e.g. a stationery
+    // line never runs on amazon-deck).
+    const itemCategoryByIndex: Record<number, string> = Object.fromEntries(
+      uploadData.detection.groups.flatMap((g) =>
+        g.itemIndices.map((i) => [i, g.category] as const)
+      )
+    );
+
     const searchItems = uploadData.items.map((item, idx) => {
       const norm = normalizedItems.find((n) => n.index === idx);
       const override = itemOverrides[idx];
@@ -366,6 +376,7 @@ export default function HomePage() {
         quantity: item.quantity,
         unit: item.unit,
         searchQueries,
+        category: itemCategoryByIndex[idx],
       };
     });
 

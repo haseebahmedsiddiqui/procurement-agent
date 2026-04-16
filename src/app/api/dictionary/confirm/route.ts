@@ -28,6 +28,7 @@ interface RejectedMatch {
   productUrl?: string;
   price?: number;
   confidence?: number;
+  reason?: string;
 }
 
 /**
@@ -142,6 +143,7 @@ export async function POST(request: NextRequest) {
           confidence: r.confidence,
         },
         action: "rejected",
+        reason: r.reason?.trim() || undefined,
       });
       savedRejections++;
     }

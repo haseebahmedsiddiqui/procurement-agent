@@ -18,6 +18,7 @@ const matchFeedbackSchema = new Schema(
     },
     correctedProductId: { type: String },
     correctedProductUrl: { type: String },
+    reason: { type: String },
   },
   { timestamps: true }
 );
