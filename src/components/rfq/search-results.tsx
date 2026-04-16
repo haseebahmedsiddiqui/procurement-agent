@@ -24,6 +24,8 @@ import {
   AlertTriangle,
   ShieldAlert,
   Ban,
+  Plus,
+  Link as LinkIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NormalizedItem } from "@/lib/ai/item-normalizer";
@@ -49,6 +51,16 @@ interface RFQItem {
   impaCode?: string;
   quantity: number;
   unit: string;
+}
+
+interface ScrapedProduct {
+  productName: string;
+  productId: string;
+  productUrl: string;
+  price: number;
+  currency: string;
+  inStock: boolean;
+  imageUrl?: string;
 }
 
 interface SearchResultsProps {
@@ -78,18 +90,40 @@ export function SearchResults({
   filename,
   summary,
 }: SearchResultsProps) {
+  // --- Confirm / Reject state ---
   const [actions, setActions] = useState<Record<string, MatchAction>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [rejectUrls, setRejectUrls] = useState<Record<string, string>>({});
   const [rejectingKey, setRejectingKey] = useState<string | null>(null);
   const [reasonDraft, setReasonDraft] = useState("");
+  const [rejectUrlDraft, setRejectUrlDraft] = useState("");
+
+  // --- Manual product entry (no-result cells) ---
+  const [manualProducts, setManualProducts] = useState<Record<string, ScrapedProduct>>({});
+  const [addingProductKey, setAddingProductKey] = useState<string | null>(null);
+  const [addProductUrlDraft, setAddProductUrlDraft] = useState("");
+  const [searchSuggestions, setSearchSuggestions] = useState<Record<string, string>>({});
+  const [suggestionDraft, setSuggestionDraft] = useState("");
+
+  // --- Scraping state ---
+  const [scrapingKeys, setScrapingKeys] = useState<Set<string>>(new Set());
+
+  // --- Save / Export ---
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  // ---------- helpers ----------
 
   const setAction = (key: string, action: MatchAction) => {
     setActions((prev) => ({ ...prev, [key]: action }));
     if (action === null) {
       setReasons((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      setRejectUrls((prev) => {
         const next = { ...prev };
         delete next[key];
         return next;
@@ -104,35 +138,100 @@ export function SearchResults({
   const openRejectFor = (key: string) => {
     setRejectingKey(key);
     setReasonDraft(reasons[key] || "");
+    setRejectUrlDraft(rejectUrls[key] || "");
   };
 
   const cancelReject = () => {
     setRejectingKey(null);
     setReasonDraft("");
+    setRejectUrlDraft("");
+  };
+
+  const scrapeProduct = async (key: string, url: string) => {
+    setScrapingKeys((prev) => new Set(prev).add(key));
+    try {
+      const res = await fetch("/api/scrape-product", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setManualProducts((prev) => ({ ...prev, [key]: data as ScrapedProduct }));
+      toast.success(`Product scraped: ${(data as ScrapedProduct).productName?.slice(0, 60)}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Scrape failed");
+    } finally {
+      setScrapingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
   };
 
   const commitReject = () => {
     if (!rejectingKey) return;
-    const trimmed = reasonDraft.trim();
-    setReasons((prev) => ({ ...prev, [rejectingKey]: trimmed }));
+    const trimmedReason = reasonDraft.trim();
+    const trimmedUrl = rejectUrlDraft.trim();
+
+    setReasons((prev) => ({ ...prev, [rejectingKey]: trimmedReason }));
     setActions((prev) => ({ ...prev, [rejectingKey]: "rejected" }));
+    if (trimmedUrl) {
+      setRejectUrls((prev) => ({ ...prev, [rejectingKey]: trimmedUrl }));
+      scrapeProduct(rejectingKey, trimmedUrl);
+    }
     if (saveStatus !== "idle") {
       setSaveStatus("idle");
       setSaveMessage(null);
     }
     setRejectingKey(null);
     setReasonDraft("");
+    setRejectUrlDraft("");
+  };
+
+  const openAddProduct = (key: string) => {
+    setAddingProductKey(key);
+    setAddProductUrlDraft("");
+    setSuggestionDraft(searchSuggestions[key] || "");
+  };
+
+  const cancelAddProduct = () => {
+    setAddingProductKey(null);
+    setAddProductUrlDraft("");
+    setSuggestionDraft("");
+  };
+
+  const commitAddProduct = () => {
+    if (!addingProductKey) return;
+    const url = addProductUrlDraft.trim();
+    const suggestion = suggestionDraft.trim();
+    if (suggestion) {
+      setSearchSuggestions((prev) => ({ ...prev, [addingProductKey]: suggestion }));
+    }
+    if (url) {
+      scrapeProduct(addingProductKey, url);
+    }
+    setAddingProductKey(null);
+    setAddProductUrlDraft("");
+    setSuggestionDraft("");
   };
 
   const confirmedCount = Object.values(actions).filter((a) => a === "confirmed").length;
   const rejectedCount = Object.values(actions).filter((a) => a === "rejected").length;
+  const manualCount = Object.keys(manualProducts).length;
+  const feedbackCount = confirmedCount + rejectedCount + manualCount;
+
+  // ---------- save ----------
 
   const handleSaveToDictionary = async () => {
-    if (confirmedCount === 0 && rejectedCount === 0) return;
+    if (feedbackCount === 0) return;
 
     const matches: Array<Record<string, unknown>> = [];
     const rejections: Array<Record<string, unknown>> = [];
+    const manualEntries: Array<Record<string, unknown>> = [];
 
+    // Confirmed + rejected from actions
     for (const [key, action] of Object.entries(actions)) {
       if (action !== "confirmed" && action !== "rejected") continue;
       const [idxStr, vendorSlug] = key.split("-");
@@ -165,11 +264,44 @@ export function SearchResults({
         matches.push(base);
       } else {
         const reason = reasons[key]?.trim();
-        rejections.push(reason ? { ...base, reason } : base);
+        const suggestedProductUrl = rejectUrls[key]?.trim();
+        rejections.push({
+          ...base,
+          ...(reason ? { reason } : {}),
+          ...(suggestedProductUrl ? { suggestedProductUrl } : {}),
+        });
       }
     }
 
-    if (matches.length === 0 && rejections.length === 0) {
+    // Manual products (from no-result cells that had URL pasted)
+    for (const [key, product] of Object.entries(manualProducts)) {
+      const [idxStr, vendorSlug] = key.split("-");
+      const idx = Number(idxStr);
+      const item = items[idx];
+      if (!item) continue;
+
+      // Skip if this key was already handled as a rejection+URL (it's already in rejections)
+      if (actions[key] === "rejected" && rejectUrls[key]) continue;
+
+      const norm = normalizedItems?.find((n) => n.index === idx);
+      const category = itemCategoryMap[idx];
+      if (!category) continue;
+
+      manualEntries.push({
+        rfqDescription: item.description,
+        normalizedName: norm?.normalizedName || item.description,
+        impaCode: item.impaCode,
+        category,
+        vendorSlug,
+        productName: product.productName,
+        productId: product.productId,
+        productUrl: product.productUrl,
+        price: product.price,
+        searchSuggestion: searchSuggestions[key]?.trim() || undefined,
+      });
+    }
+
+    if (matches.length === 0 && rejections.length === 0 && manualEntries.length === 0) {
       setSaveStatus("error");
       setSaveMessage("No valid feedback to save.");
       return;
@@ -182,7 +314,7 @@ export function SearchResults({
       const res = await fetch("/api/dictionary/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ matches, rejections }),
+        body: JSON.stringify({ matches, rejections, manualEntries }),
       });
 
       const data = await res.json();
@@ -192,12 +324,9 @@ export function SearchResults({
 
       setSaveStatus("success");
       const parts: string[] = [];
-      if (data.savedMappings > 0) {
-        parts.push(`${data.savedMappings} confirmed`);
-      }
-      if (data.savedRejections > 0) {
-        parts.push(`${data.savedRejections} rejected`);
-      }
+      if (data.savedMappings > 0) parts.push(`${data.savedMappings} confirmed`);
+      if (data.savedRejections > 0) parts.push(`${data.savedRejections} rejected`);
+      if (data.savedManualEntries > 0) parts.push(`${data.savedManualEntries} manual`);
       const summaryText =
         parts.join(" + ") +
         (data.savedItems > 0
@@ -255,6 +384,174 @@ export function SearchResults({
     }
   };
 
+  // ---------- render helpers ----------
+
+  function renderManualProduct(key: string, product: ScrapedProduct) {
+    return (
+      <div className="rounded-lg p-2.5 -m-1 space-y-1.5 ring-1 ring-primary/40 bg-primary/5">
+        <p className="text-sm font-medium leading-tight">
+          <a
+            href={product.productUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline inline-flex items-center gap-1"
+          >
+            {product.productName}
+            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+          </a>
+        </p>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-bold text-base tabular-nums">
+            ${product.price.toFixed(2)}
+          </span>
+          <Badge className="text-[9px] h-4 bg-primary/15 text-primary">
+            Manual
+          </Badge>
+          {product.inStock ? (
+            <Badge
+              variant="secondary"
+              className="text-[9px] h-4 bg-emerald-500/10 text-emerald-700"
+            >
+              In Stock
+            </Badge>
+          ) : (
+            <Badge variant="destructive" className="text-[9px] h-4">
+              OOS
+            </Badge>
+          )}
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          {product.productId} &middot; scraped
+        </p>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-5 text-[10px] px-1 text-muted-foreground"
+          onClick={() =>
+            setManualProducts((prev) => {
+              const next = { ...prev };
+              delete next[key];
+              return next;
+            })
+          }
+        >
+          Remove
+        </Button>
+      </div>
+    );
+  }
+
+  function renderNoResultCell(key: string, vr?: VendorResult) {
+    const manual = manualProducts[key];
+    const isScraping = scrapingKeys.has(key);
+    const isAdding = addingProductKey === key;
+
+    if (isScraping) {
+      return (
+        <div className="flex flex-col items-center gap-1 py-2">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-[10px] text-muted-foreground">Scraping...</span>
+        </div>
+      );
+    }
+
+    if (manual) {
+      return renderManualProduct(key, manual);
+    }
+
+    if (isAdding) {
+      return (
+        <div className="space-y-1.5 p-1">
+          <input
+            autoFocus
+            type="url"
+            value={addProductUrlDraft}
+            placeholder="Paste product URL"
+            onChange={(e) => setAddProductUrlDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitAddProduct();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                cancelAddProduct();
+              }
+            }}
+            className="w-full text-[11px] rounded border border-input bg-background px-2 py-1 outline-none focus:border-primary"
+          />
+          <input
+            type="text"
+            value={suggestionDraft}
+            placeholder="Search suggestion for next time (optional)"
+            onChange={(e) => setSuggestionDraft(e.target.value)}
+            className="w-full text-[11px] rounded border border-input bg-background px-2 py-1 outline-none focus:border-primary"
+          />
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px] px-2 gap-1"
+              onClick={commitAddProduct}
+              disabled={!addProductUrlDraft.trim()}
+            >
+              <Plus className="h-3 w-3" />
+              Add
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[10px] px-2"
+              onClick={cancelAddProduct}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col items-center gap-1.5">
+        {vr?.errorType === "captcha" ? (
+          <div className="inline-flex items-center gap-1 text-amber-600">
+            <AlertTriangle className="h-3 w-3" />
+            <span className="text-[10px]">CAPTCHA</span>
+          </div>
+        ) : vr?.errorType === "auth_expired" ? (
+          <div className="inline-flex items-center gap-1 text-orange-600">
+            <ShieldAlert className="h-3 w-3" />
+            <span className="text-[10px]">Login required</span>
+          </div>
+        ) : vr?.errorType === "blocked" ? (
+          <div className="inline-flex items-center gap-1 text-destructive">
+            <Ban className="h-3 w-3" />
+            <span className="text-[10px]">Blocked</span>
+          </div>
+        ) : vr?.error ? (
+          <span className="text-destructive text-[10px]">{vr.error}</span>
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        )}
+        {searchSuggestions[key] && (
+          <p className="text-[10px] text-muted-foreground italic">
+            Suggested: "{searchSuggestions[key]}"
+          </p>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 text-[10px] px-2 gap-1 text-primary"
+          onClick={() => openAddProduct(key)}
+        >
+          <Plus className="h-3 w-3" />
+          Add Product
+        </Button>
+      </div>
+    );
+  }
+
+  // ---------- main render ----------
+
   return (
     <div className="space-y-4">
       {/* Summary cards */}
@@ -281,9 +578,9 @@ export function SearchResults({
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Confirmed</p>
-            <p className={cn("text-2xl font-bold", confirmedCount > 0 ? "text-primary" : "text-muted-foreground")}>
-              {confirmedCount}
+            <p className="text-xs text-muted-foreground">Feedback</p>
+            <p className={cn("text-2xl font-bold", feedbackCount > 0 ? "text-primary" : "text-muted-foreground")}>
+              {feedbackCount}
             </p>
           </CardContent>
         </Card>
@@ -350,30 +647,35 @@ export function SearchResults({
                         const key = `${idx}-${slug}`;
                         const action = actions[key];
                         const isCheapest = cheapestVendorSlug === slug;
+                        const isScraping = scrapingKeys.has(key);
 
                         if (!vr || !vr.productName) {
                           return (
                             <TableCell key={slug} className="align-top text-center">
-                              {vr?.errorType === "captcha" ? (
-                                <div className="inline-flex items-center gap-1 text-amber-600">
-                                  <AlertTriangle className="h-3 w-3" />
-                                  <span className="text-[10px]">CAPTCHA</span>
-                                </div>
-                              ) : vr?.errorType === "auth_expired" ? (
-                                <div className="inline-flex items-center gap-1 text-orange-600">
-                                  <ShieldAlert className="h-3 w-3" />
-                                  <span className="text-[10px]">Login required</span>
-                                </div>
-                              ) : vr?.errorType === "blocked" ? (
-                                <div className="inline-flex items-center gap-1 text-destructive">
-                                  <Ban className="h-3 w-3" />
-                                  <span className="text-[10px]">Blocked</span>
-                                </div>
-                              ) : vr?.error ? (
-                                <span className="text-destructive text-[10px]">{vr.error}</span>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">—</span>
-                              )}
+                              {renderNoResultCell(key, vr)}
+                            </TableCell>
+                          );
+                        }
+
+                        // Show scraped alternate product if rejected with URL
+                        if (action === "rejected" && manualProducts[key]) {
+                          return (
+                            <TableCell key={slug} className="align-top">
+                              {renderManualProduct(key, manualProducts[key])}
+                              <div className="mt-1.5 space-y-0.5">
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] cursor-pointer bg-destructive/10 text-destructive border-destructive/30"
+                                  onClick={() => setAction(key, null)}
+                                >
+                                  Rejected original (undo)
+                                </Badge>
+                                {reasons[key] && (
+                                  <p className="text-[10px] text-muted-foreground italic line-clamp-2">
+                                    &ldquo;{reasons[key]}&rdquo;
+                                  </p>
+                                )}
+                              </div>
                             </TableCell>
                           );
                         }
@@ -430,12 +732,14 @@ export function SearchResults({
                               <p className="text-[10px] text-muted-foreground">
                                 {vr.productId} &middot; {vr.source} &middot; {vr.durationMs}ms
                               </p>
+
+                              {/* Reject form (reason + alternate URL) */}
                               {rejectingKey === key ? (
                                 <div className="pt-0.5 space-y-1">
                                   <textarea
                                     autoFocus
                                     value={reasonDraft}
-                                    placeholder="Why is this wrong? (optional — e.g. wrong size, not marine-grade)"
+                                    placeholder="Why is this wrong? (optional)"
                                     onChange={(e) => setReasonDraft(e.target.value)}
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -449,6 +753,16 @@ export function SearchResults({
                                     rows={2}
                                     className="w-full text-[11px] rounded border border-input bg-background px-2 py-1 outline-none focus:border-primary resize-none"
                                   />
+                                  <div className="flex items-center gap-1">
+                                    <LinkIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    <input
+                                      type="url"
+                                      value={rejectUrlDraft}
+                                      placeholder="Alternate product URL (optional)"
+                                      onChange={(e) => setRejectUrlDraft(e.target.value)}
+                                      className="w-full text-[11px] rounded border border-input bg-background px-2 py-1 outline-none focus:border-primary"
+                                    />
+                                  </div>
                                   <div className="flex gap-1">
                                     <Button
                                       size="sm"
@@ -468,6 +782,13 @@ export function SearchResults({
                                       Cancel
                                     </Button>
                                   </div>
+                                </div>
+                              ) : isScraping ? (
+                                <div className="flex items-center gap-1.5 pt-0.5">
+                                  <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                  <span className="text-[10px] text-muted-foreground">
+                                    Scraping alternate...
+                                  </span>
                                 </div>
                               ) : action === null || action === undefined ? (
                                 <div className="flex gap-1 pt-0.5">
@@ -511,7 +832,7 @@ export function SearchResults({
                                   </Badge>
                                   {action === "rejected" && reasons[key] && (
                                     <p className="text-[10px] text-muted-foreground italic line-clamp-2">
-                                      “{reasons[key]}”
+                                      &ldquo;{reasons[key]}&rdquo;
                                     </p>
                                   )}
                                 </div>
@@ -535,7 +856,9 @@ export function SearchResults({
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">
-                {confirmedCount} confirmed, {rejectedCount} rejected,{" "}
+                {confirmedCount} confirmed, {rejectedCount} rejected
+                {manualCount > 0 && `, ${manualCount} manual`}
+                {" — "}
                 {summary.totalResults - confirmedCount - rejectedCount} pending
               </p>
               {saveMessage && (
@@ -567,9 +890,7 @@ export function SearchResults({
               </Button>
               <Button
                 size="sm"
-                disabled={
-                  confirmedCount + rejectedCount === 0 || saveStatus === "saving"
-                }
+                disabled={feedbackCount === 0 || saveStatus === "saving"}
                 onClick={handleSaveToDictionary}
                 className="gap-1.5"
               >
@@ -584,7 +905,7 @@ export function SearchResults({
                   ? "Saving..."
                   : saveStatus === "success"
                   ? "Saved"
-                  : `Save Feedback (${confirmedCount + rejectedCount})`}
+                  : `Save Feedback (${feedbackCount})`}
               </Button>
             </div>
           </div>
