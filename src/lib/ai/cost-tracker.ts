@@ -14,7 +14,8 @@ export type CallType =
   | "category_detection"
   | "normalization"
   | "price_extraction"
-  | "match_evaluation";
+  | "match_evaluation"
+  | "product_scrape";
 
 interface TokenUsage {
   inputTokens: number;

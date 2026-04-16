@@ -29,6 +29,20 @@ interface RejectedMatch {
   price?: number;
   confidence?: number;
   reason?: string;
+  suggestedProductUrl?: string;
+}
+
+interface ManualEntry {
+  rfqDescription: string;
+  normalizedName: string;
+  impaCode?: string;
+  category: string;
+  vendorSlug: string;
+  productName: string;
+  productId?: string;
+  productUrl: string;
+  price?: number;
+  searchSuggestion?: string;
 }
 
 /**
@@ -38,25 +52,22 @@ interface RejectedMatch {
  * short-circuit the AI extraction layer AND so the match-evaluator can use
  * past decisions as few-shot examples.
  *
- * Body: { matches?: ConfirmedMatch[], rejections?: RejectedMatch[] }
- *
- * Confirmed matches upsert an Item by (normalizedName + category) and merge
- * the vendor mapping in. Both confirmed and rejected actions write a
- * MatchFeedback record (the rejected ones don't touch Item.vendors but they
- * still feed the few-shot pool so the LLM learns what NOT to pick).
+ * Body: { matches?, rejections?, manualEntries? }
  */
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
       matches?: ConfirmedMatch[];
       rejections?: RejectedMatch[];
+      manualEntries?: ManualEntry[];
     };
     const matches = body.matches || [];
     const rejections = body.rejections || [];
+    const manualEntries = body.manualEntries || [];
 
-    if (matches.length === 0 && rejections.length === 0) {
+    if (matches.length === 0 && rejections.length === 0 && manualEntries.length === 0) {
       return NextResponse.json(
-        { error: "matches or rejections array is required" },
+        { error: "matches, rejections, or manualEntries array is required" },
         { status: 400 }
       );
     }
@@ -66,9 +77,9 @@ export async function POST(request: NextRequest) {
     let savedItems = 0;
     let savedMappings = 0;
     let savedRejections = 0;
+    let savedManualEntries = 0;
 
     for (const m of matches) {
-      // Find or create item
       let item = await Item.findOne({
         normalizedName: m.normalizedName,
         category: m.category,
@@ -85,7 +96,6 @@ export async function POST(request: NextRequest) {
         savedItems++;
       }
 
-      // Merge vendor mapping
       const vendors = item.vendors as Map<string, unknown>;
       vendors.set(m.vendorSlug, {
         productId: m.productId,
@@ -98,7 +108,6 @@ export async function POST(request: NextRequest) {
       await item.save();
       savedMappings++;
 
-      // Record feedback for future few-shot prompting
       await MatchFeedback.create({
         itemId: item._id,
         vendorSlug: m.vendorSlug,
@@ -114,8 +123,6 @@ export async function POST(request: NextRequest) {
     }
 
     for (const r of rejections) {
-      // Find or create item — rejections still need an Item to attach to
-      // so the few-shot loader can join by category later.
       let item = await Item.findOne({
         normalizedName: r.normalizedName,
         category: r.category,
@@ -132,6 +139,21 @@ export async function POST(request: NextRequest) {
         savedItems++;
       }
 
+      // If operator suggested an alternate URL, store it as a corrected mapping
+      if (r.suggestedProductUrl?.trim()) {
+        const vendors = item.vendors as Map<string, unknown>;
+        vendors.set(r.vendorSlug, {
+          productId: r.productId || "",
+          productIdType: detectProductIdType(r.vendorSlug),
+          searchQuery: r.normalizedName,
+          productUrl: r.suggestedProductUrl.trim(),
+          verified: false,
+          source: "operator_suggestion",
+          verifiedAt: new Date(),
+        });
+        await item.save();
+      }
+
       await MatchFeedback.create({
         itemId: item._id,
         vendorSlug: r.vendorSlug,
@@ -144,8 +166,54 @@ export async function POST(request: NextRequest) {
         },
         action: "rejected",
         reason: r.reason?.trim() || undefined,
+        suggestedProductUrl: r.suggestedProductUrl?.trim() || undefined,
       });
       savedRejections++;
+    }
+
+    for (const e of manualEntries) {
+      let item = await Item.findOne({
+        normalizedName: e.normalizedName,
+        category: e.category,
+      });
+
+      if (!item) {
+        item = await Item.create({
+          rfqDescription: e.rfqDescription,
+          normalizedName: e.normalizedName,
+          impaCode: e.impaCode,
+          category: e.category,
+          vendors: {},
+        });
+        savedItems++;
+      }
+
+      const vendors = item.vendors as Map<string, unknown>;
+      vendors.set(e.vendorSlug, {
+        productId: e.productId || "",
+        productIdType: detectProductIdType(e.vendorSlug),
+        searchQuery: e.normalizedName,
+        productUrl: e.productUrl,
+        verified: true,
+        verifiedAt: new Date(),
+        source: "manual_entry",
+      });
+      await item.save();
+      savedMappings++;
+
+      await MatchFeedback.create({
+        itemId: item._id,
+        vendorSlug: e.vendorSlug,
+        originalMatch: {
+          productName: e.productName,
+          productId: e.productId,
+          productUrl: e.productUrl,
+          price: e.price,
+        },
+        action: "manual_entry",
+        searchSuggestion: e.searchSuggestion?.trim() || undefined,
+      });
+      savedManualEntries++;
     }
 
     logger.info(
@@ -153,8 +221,10 @@ export async function POST(request: NextRequest) {
         savedItems,
         savedMappings,
         savedRejections,
+        savedManualEntries,
         confirmed: matches.length,
         rejected: rejections.length,
+        manual: manualEntries.length,
       },
       "Dictionary feedback batch saved"
     );
@@ -164,6 +234,7 @@ export async function POST(request: NextRequest) {
       savedItems,
       savedMappings,
       savedRejections,
+      savedManualEntries,
     });
   } catch (err) {
     logger.error({ error: err }, "Dictionary confirm failed");

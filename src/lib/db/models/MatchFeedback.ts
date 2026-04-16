@@ -13,12 +13,14 @@ const matchFeedbackSchema = new Schema(
     },
     action: {
       type: String,
-      enum: ["confirmed", "rejected", "corrected"],
+      enum: ["confirmed", "rejected", "corrected", "manual_entry"],
       required: true,
     },
     correctedProductId: { type: String },
     correctedProductUrl: { type: String },
+    suggestedProductUrl: { type: String },
     reason: { type: String },
+    searchSuggestion: { type: String },
   },
   { timestamps: true }
 );
