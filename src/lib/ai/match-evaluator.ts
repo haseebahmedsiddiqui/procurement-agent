@@ -102,6 +102,24 @@ export async function evaluateMatch(
     )
     .join("\n");
 
+  // Log the candidate pool the evaluator is about to judge. Helps diagnose
+  // whether a rejection is "bad candidates from search" vs "good candidates
+  // that the LLM wrongly rejected" — two very different fixes.
+  logger.info(
+    {
+      vendor: vendorSlug,
+      rfqDescription,
+      normalizedName,
+      candidateCount: candidates.length,
+      candidates: candidates.map((c) => ({
+        name: c.productName,
+        price: c.price,
+        inStock: c.inStock,
+      })),
+    },
+    "Match evaluator candidates"
+  );
+
   // Pull few-shot examples from past feedback (only if we know the vendor)
   const fewShots = vendorSlug
     ? await loadFewShots(category, vendorSlug)
@@ -172,7 +190,28 @@ If NO candidate is acceptable, set bestMatchIndex to -1 and confidence to 0.`;
 
   try {
     const parsed = JSON.parse(jsonMatch[0]);
-    return MatchEvaluationSchema.parse(parsed);
+    const evaluation = MatchEvaluationSchema.parse(parsed);
+
+    // Log the verdict so we can see WHY the LLM accepted or rejected.
+    // Critical for diagnosing the "same product accepted for M but rejected
+    // for L" pattern — without this you only see the pass/fail, not the why.
+    logger.info(
+      {
+        vendor: vendorSlug,
+        rfqDescription,
+        bestMatchIndex: evaluation.bestMatchIndex,
+        confidence: evaluation.confidence,
+        reasoning: evaluation.reasoning,
+        warnings: evaluation.warnings,
+        chosenProduct:
+          evaluation.bestMatchIndex >= 0
+            ? candidates[evaluation.bestMatchIndex]?.productName
+            : null,
+      },
+      "Match evaluator verdict"
+    );
+
+    return evaluation;
   } catch {
     return {
       bestMatchIndex: 0,

@@ -391,7 +391,18 @@ export abstract class BaseVendorAdapter {
 
     if (evaluation.bestMatchIndex < 0 || evaluation.confidence < 0.3) {
       logger.info(
-        { vendor: this.config.slug, confidence: evaluation.confidence },
+        {
+          vendor: this.config.slug,
+          searchQuery: input.searchQuery,
+          rfqDescription: input.rfqDescription,
+          confidence: evaluation.confidence,
+          reasoning: evaluation.reasoning,
+          warnings: evaluation.warnings,
+          rejectedCandidates: products.map((p) => ({
+            name: p.productName,
+            price: p.price,
+          })),
+        },
         "No acceptable match found"
       );
       return null;
