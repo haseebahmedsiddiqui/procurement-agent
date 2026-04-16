@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUpload, type UploadResult } from "@/components/rfq/file-upload";
 import { StorePicker } from "@/components/rfq/store-picker";
-import { ItemsTable } from "@/components/rfq/items-table";
+import { ItemsTable, type ItemOverride } from "@/components/rfq/items-table";
 import { SearchResults } from "@/components/rfq/search-results";
 import { SearchLog, type LogLine } from "@/components/rfq/search-log";
 import { cn } from "@/lib/utils";
@@ -105,6 +105,7 @@ export default function HomePage() {
   const [selectedVendors, setSelectedVendors] = useState<Record<string, string[]>>({});
   const [normalizedItems, setNormalizedItems] = useState<NormalizedItem[]>([]);
   const [normalizeError, setNormalizeError] = useState<string | null>(null);
+  const [itemOverrides, setItemOverrides] = useState<Record<number, ItemOverride>>({});
   const [searchResults, setSearchResults] = useState<Record<number, Array<{
     vendorSlug: string; productName?: string; productId?: string;
     productUrl?: string; price?: number; currency?: string;
@@ -344,15 +345,27 @@ export default function HomePage() {
 
     const searchItems = uploadData.items.map((item, idx) => {
       const norm = normalizedItems.find((n) => n.index === idx);
+      const override = itemOverrides[idx];
+      const overrideQuery = override?.partNumber?.trim()
+        ? `${override.brand?.trim() ?? ""} ${override.partNumber.trim()}`.trim()
+        : null;
+
+      // When the operator types a brand+part number, that becomes an exact-match
+      // search across every vendor — no LLM-generated fuzz, no vendor-specific
+      // qualifiers. Highest-precision path.
+      const searchQueries = overrideQuery
+        ? Object.fromEntries(allSlugs.map((s) => [s, overrideQuery]))
+        : norm?.searchQueries ||
+          Object.fromEntries(allSlugs.map((s) => [s, item.description]));
+
       return {
         index: idx,
         rfqDescription: item.description,
-        normalizedName: norm?.normalizedName || item.description,
+        normalizedName: overrideQuery || norm?.normalizedName || item.description,
         impaCode: item.impaCode,
         quantity: item.quantity,
         unit: item.unit,
-        searchQueries: norm?.searchQueries ||
-          Object.fromEntries(allSlugs.map((s) => [s, item.description])),
+        searchQueries,
       };
     });
 
@@ -413,11 +426,29 @@ export default function HomePage() {
     } finally {
       abortRef.current = null;
     }
-  }, [uploadData, selectedVendors, normalizedItems, handleSearchEvent, appendLog]);
+  }, [uploadData, selectedVendors, normalizedItems, itemOverrides, handleSearchEvent, appendLog]);
 
   const handleCancelSearch = useCallback(() => {
     abortRef.current?.abort();
   }, []);
+
+  const handleOverrideChange = useCallback(
+    (index: number, field: "brand" | "partNumber", value: string) => {
+      setItemOverrides((prev) => {
+        const trimmed = value.trim();
+        const current = prev[index] ?? {};
+        const next: ItemOverride = { ...current, [field]: trimmed || undefined };
+        // Drop empty entries so the cell visual state stays clean
+        if (!next.brand && !next.partNumber) {
+          const { [index]: _removed, ...rest } = prev;
+          void _removed;
+          return rest;
+        }
+        return { ...prev, [index]: next };
+      });
+    },
+    []
+  );
 
   const handleReset = () => {
     abortRef.current?.abort();
@@ -425,6 +456,7 @@ export default function HomePage() {
     setUploadData(null);
     setNormalizedItems([]);
     setNormalizeError(null);
+    setItemOverrides({});
     setSearchResults({});
     setSearchLogs([]);
     setSearchProgress(null);
@@ -548,6 +580,8 @@ export default function HomePage() {
             vendorSlugs={
               normalizedItems.length > 0 ? allSelectedSlugs : undefined
             }
+            overrides={itemOverrides}
+            onUpdateOverride={handleOverrideChange}
           />
 
           <div className="flex justify-end gap-3">
