@@ -389,7 +389,7 @@ export abstract class BaseVendorAdapter {
       this.config.slug
     );
 
-    if (evaluation.bestMatchIndex < 0 || evaluation.confidence < 0.3) {
+    if (evaluation.bestMatchIndex < 0 || evaluation.confidence < 0.2) {
       logger.info(
         {
           vendor: this.config.slug,

@@ -65,7 +65,7 @@ export async function extractPricesFromHtml(
 
   // 20k chars ≈ 5k tokens. Lower budget reduces 50K-tokens/min rate-limit hits
   // when several vendor extractions run in parallel.
-  const MAX_HTML_CHARS = 20000;
+  const MAX_HTML_CHARS = 30000;
   const truncatedHtml =
     cleaned.length > MAX_HTML_CHARS
       ? cleaned.slice(0, MAX_HTML_CHARS) + "\n... [truncated]"

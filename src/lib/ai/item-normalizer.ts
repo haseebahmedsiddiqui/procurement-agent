@@ -116,7 +116,17 @@ Do NOT add the words "marine grade", "commercial", "restaurant grade", "industri
 Most real product listings (especially on Amazon) do not self-describe with these terms,
 so adding them filters out the actual matching products. The match-evaluator step later
 will judge fitness for marine/commercial use; the search query just needs to find
-candidates.`;
+candidates.
+
+CLOTHING / GARMENT items — gender prefix:
+If the item is clothing (t-shirt, trousers, coverall, boots, gloves, etc.), ALWAYS
+prepend "men's" to the search query UNLESS the RFQ description explicitly mentions
+"women", "female", or "ladies". Maritime crew workwear is almost always men's; without
+the prefix, Amazon returns women's fashion which wastes the search.
+Examples:
+  "T-SHIRT SHORT SLEEVE WHITE SIZE-M" → "men's white short sleeve t-shirt medium"
+  "TROUSERS POLYESTER BLACK L"        → "men's black polyester trousers large"
+  "COVERALL COTTON BLUE SIZE-XL"      → "men's blue cotton coverall xl"`;
 
   const client = getAIClient();
 
