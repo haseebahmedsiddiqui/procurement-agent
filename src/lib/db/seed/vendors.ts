@@ -107,7 +107,7 @@ export const vendorsSeed = [
     extractionHints:
       "For industrial/marine items on Amazon, look for industrial & scientific category results. Prices per unit. Check seller ratings.",
     searchQueryTemplate:
-      "Use technical/industrial terms. Include material specifications. Add 'marine grade' for deck items.",
+      "Use plain consumer terms — Amazon listings rarely self-describe as 'marine grade' or 'industrial'. Include material (steel, brass) and key dimensions only if in the RFQ. Brand + model number is best when known.",
     healthStatus: "healthy" as const,
   },
   {
@@ -173,7 +173,7 @@ export const vendorsSeed = [
     extractionHints:
       "For kitchen/galley items on Amazon, look for restaurant supply and commercial kitchen results. Check for NSF certification mentions.",
     searchQueryTemplate:
-      "Use commercial kitchen/restaurant supply terms. Add 'commercial' or 'restaurant grade' for professional items.",
+      "Use plain consumer terms — Amazon listings rarely self-describe as 'commercial' or 'restaurant grade'. Include material and key dimensions only if in the RFQ. Brand + model number is best when known.",
     healthStatus: "healthy" as const,
   },
   {

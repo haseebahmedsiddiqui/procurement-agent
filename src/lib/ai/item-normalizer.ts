@@ -104,11 +104,19 @@ Respond with ONLY valid JSON:
 Rules:
 - normalizedName should be a clean, search-friendly product name
 - Each vendor's query should be tailored to that vendor's catalog style
-- For Amazon: use consumer-friendly terms, include "pack" or "box" for bulk items
+- For Amazon: use plain consumer terms, include "pack" or "box" for bulk items
 - For McMaster/Grainger: use technical/industrial terms, include dimensions
 - For Staples/OfficeDepot: use standard office supply terms
-- For Webstaurant/Equippers: use commercial kitchen/foodservice terms
-- Keep queries concise (3-6 words typically)`;
+- For Webstaurant/Equippers: vendor catalog is already commercial — do NOT add the word "commercial" as a qualifier (it's redundant noise)
+- Keep queries concise (3-6 words typically)
+
+CRITICAL — qualifiers that destroy recall:
+Do NOT add the words "marine grade", "commercial", "restaurant grade", "industrial",
+"professional", or "heavy duty" unless those exact words appear in the RFQ description.
+Most real product listings (especially on Amazon) do not self-describe with these terms,
+so adding them filters out the actual matching products. The match-evaluator step later
+will judge fitness for marine/commercial use; the search query just needs to find
+candidates.`;
 
   const client = getAIClient();
 
