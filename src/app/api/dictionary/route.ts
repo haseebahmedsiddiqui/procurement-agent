@@ -12,7 +12,8 @@ import { logger } from "@/lib/logger";
  *   q        — text search across normalizedName / rfqDescription / impaCode
  *   category — stationery | deck_engine | galley_kitchen
  *   vendor   — only include items that have a verified mapping for this vendor
- *   limit    — max rows (default 100, capped at 500)
+ *   limit    — max rows per page (default 100, capped at 1000)
+ *   skip     — pagination offset (default 0)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -22,8 +23,9 @@ export async function GET(request: NextRequest) {
     const vendor = url.searchParams.get("vendor")?.trim() || "";
     const limit = Math.min(
       parseInt(url.searchParams.get("limit") || "100", 10),
-      500
+      1000
     );
+    const skip = Math.max(parseInt(url.searchParams.get("skip") || "0", 10), 0);
 
     await connectDB();
 
@@ -40,10 +42,10 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const items = await Item.find(filter)
-      .sort({ updatedAt: -1 })
-      .limit(limit)
-      .lean();
+    const [items, total] = await Promise.all([
+      Item.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limit).lean(),
+      Item.countDocuments(filter),
+    ]);
 
     const summary = items.map((it) => {
       // Mongoose .lean() returns vendors as a plain object, not a Map
@@ -65,7 +67,13 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ items: summary, total: summary.length });
+    return NextResponse.json({
+      items: summary,
+      total,
+      page: Math.floor(skip / limit) + 1,
+      pageSize: limit,
+      hasMore: skip + summary.length < total,
+    });
   } catch (err) {
     logger.error({ error: err }, "Dictionary list failed");
     return NextResponse.json(

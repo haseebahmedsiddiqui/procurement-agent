@@ -39,9 +39,14 @@ const CATEGORY_LABEL: Record<string, string> = {
   galley_kitchen: "Galley / Kitchen",
 };
 
+const PAGE_SIZE = 100;
+
 export default function DictionaryPage() {
   const [items, setItems] = useState<DictionaryItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
@@ -57,24 +62,52 @@ export default function DictionaryPage() {
     return () => clearTimeout(t);
   }, [q]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const buildParams = useCallback(
+    (skip: number) => {
       const params = new URLSearchParams();
       if (debouncedQ) params.set("q", debouncedQ);
       if (category) params.set("category", category);
       if (vendor) params.set("vendor", vendor);
-      const res = await fetch(`/api/dictionary?${params.toString()}`);
+      params.set("limit", String(PAGE_SIZE));
+      params.set("skip", String(skip));
+      return params;
+    },
+    [debouncedQ, category, vendor]
+  );
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/dictionary?${buildParams(0).toString()}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load");
       setItems(data.items || []);
+      setTotal(data.total ?? 0);
+      setHasMore(!!data.hasMore);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
       setLoading(false);
     }
-  }, [debouncedQ, category, vendor]);
+  }, [buildParams]);
+
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const res = await fetch(
+        `/api/dictionary?${buildParams(items.length).toString()}`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load");
+      setItems((prev) => [...prev, ...(data.items || [])]);
+      setHasMore(!!data.hasMore);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [buildParams, items.length]);
 
   useEffect(() => {
     load();
@@ -201,7 +234,9 @@ export default function DictionaryPage() {
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            {items.length} item{items.length === 1 ? "" : "s"}
+            Showing <span className="font-semibold text-foreground">{items.length}</span> of{" "}
+            <span className="font-semibold text-foreground">{total}</span> item
+            {total === 1 ? "" : "s"}
           </p>
           {items.map((item) => (
             <Card key={item.id}>
@@ -279,6 +314,21 @@ export default function DictionaryPage() {
               </CardContent>
             </Card>
           ))}
+
+          {hasMore && (
+            <div className="flex justify-center pt-4">
+              <Button
+                variant="outline"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="rounded-lg gap-2"
+              >
+                {loadingMore
+                  ? "Loading..."
+                  : `Load more (${total - items.length} remaining)`}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
