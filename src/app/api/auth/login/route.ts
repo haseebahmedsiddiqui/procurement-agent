@@ -55,7 +55,13 @@ export async function POST(request: NextRequest) {
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      // Default: secure in production. Set AUTH_COOKIE_SECURE=false when
+      // running production builds over plain HTTP (e.g. behind a non-TLS
+      // reverse proxy). Without this, browsers drop the cookie silently.
+      secure:
+        process.env.AUTH_COOKIE_SECURE === "false"
+          ? false
+          : process.env.NODE_ENV === "production",
       path: "/",
       maxAge: SESSION_MAX_AGE,
     });
