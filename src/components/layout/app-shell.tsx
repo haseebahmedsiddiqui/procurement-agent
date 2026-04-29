@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Anchor,
   Upload,
   History,
   BookOpen,
   Settings,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VendorStatusBar } from "./vendor-status-bar";
@@ -21,6 +22,17 @@ const navItems = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  if (pathname === "/login") {
+    return <>{children}</>;
+  }
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -66,7 +78,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-          <VendorStatusBar />
+          <div className="flex items-center gap-2">
+            <VendorStatusBar />
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </header>
       <main className="container flex-1 py-8 animate-fade-in-up">{children}</main>
