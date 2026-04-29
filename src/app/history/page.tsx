@@ -417,17 +417,15 @@ export default function HistoryPage() {
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex items-center gap-2.5">
                         <button
-                          onClick={() => hasRuns && toggleExpand(entry.id)}
+                          onClick={() => toggleExpand(entry.id)}
                           className={cn(
                             "flex items-center gap-2 min-w-0",
-                            hasRuns && "cursor-pointer hover:text-primary transition-colors"
+                            "cursor-pointer hover:text-primary transition-colors"
                           )}
                         >
-                          {hasRuns && (
-                            isExpanded
-                              ? <ChevronDown className="h-4 w-4 text-primary shrink-0" />
-                              : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                          )}
+                          {isExpanded
+                            ? <ChevronDown className="h-4 w-4 text-primary shrink-0" />
+                            : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
                           <p className="font-semibold text-[15px] truncate">{entry.filename}</p>
                         </button>
                       </div>
@@ -464,17 +462,15 @@ export default function HistoryPage() {
                       </div>
                     </div>
                     <div className="flex gap-2 shrink-0">
-                      {hasRuns && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1.5 rounded-lg"
-                          onClick={() => toggleExpand(entry.id)}
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          View
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 rounded-lg"
+                        onClick={() => toggleExpand(entry.id)}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        View
+                      </Button>
                       <Link href={`/?rfq=${entry.id}`}>
                         <Button size="sm" className="gap-1.5 rounded-lg shadow-sm shadow-primary/25">
                           <RotateCcw className="h-3.5 w-3.5" />
