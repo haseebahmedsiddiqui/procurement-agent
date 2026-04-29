@@ -18,10 +18,15 @@ export async function POST(request: NextRequest) {
     }
 
     const expectedEmail = process.env.AUTH_EMAIL;
-    const expectedHash = process.env.AUTH_PASSWORD_HASH;
+    // AUTH_PASSWORD_HASH_B64 takes precedence — base64 has no `$`, so it
+    // survives dotenv-expand cleanly. Falls back to AUTH_PASSWORD_HASH if set.
+    const hashB64 = process.env.AUTH_PASSWORD_HASH_B64;
+    const expectedHash = hashB64
+      ? Buffer.from(hashB64, "base64").toString("utf8")
+      : process.env.AUTH_PASSWORD_HASH;
 
     if (!expectedEmail || !expectedHash) {
-      logger.error("AUTH_EMAIL or AUTH_PASSWORD_HASH missing from env");
+      logger.error("AUTH_EMAIL or AUTH_PASSWORD_HASH(_B64) missing from env");
       return NextResponse.json(
         { error: "Server auth is not configured" },
         { status: 500 }
