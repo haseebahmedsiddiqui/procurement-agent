@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Upload } from "lucide-react";
 
 export type AuthStatus = "connected" | "expired" | "not_configured" | "not_required";
 
@@ -24,23 +25,23 @@ interface VendorCardProps {
 const authStatusConfig: Record<AuthStatus, { label: string; dot: string; badge: string }> = {
   connected: {
     label: "Connected",
-    dot: "bg-green-500",
-    badge: "bg-green-500/15 text-green-700 border-green-200",
+    dot: "bg-emerald-500",
+    badge: "bg-emerald-500/10 text-emerald-700 border border-emerald-200/60",
   },
   expired: {
     label: "Expired",
-    dot: "bg-yellow-500",
-    badge: "bg-yellow-500/15 text-yellow-700 border-yellow-200",
+    dot: "bg-amber-500",
+    badge: "bg-amber-500/10 text-amber-700 border border-amber-200/60",
   },
   not_configured: {
     label: "Not connected",
-    dot: "bg-gray-400",
-    badge: "bg-gray-500/15 text-gray-600 border-gray-200",
+    dot: "bg-zinc-400",
+    badge: "bg-zinc-500/10 text-zinc-600 border border-zinc-200/60",
   },
   not_required: {
     label: "No auth needed",
-    dot: "bg-green-500",
-    badge: "bg-green-500/15 text-green-700 border-green-200",
+    dot: "bg-emerald-500",
+    badge: "bg-emerald-500/10 text-emerald-700 border border-emerald-200/60",
   },
 };
 
@@ -50,12 +51,15 @@ export function VendorCard({
   baseUrl,
   authRequired,
   preferredStrategy,
+  sessionMaxAgeHours,
   authStatus,
   authExpiresAt,
   onAuthChange,
 }: VendorCardProps) {
   const [loading, setLoading] = useState(false);
   const [actionLabel, setActionLabel] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const config = authStatusConfig[authStatus];
 
   const handleLogin = async () => {
@@ -119,19 +123,67 @@ export function VendorCard({
     }
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    if (!/\.json$/i.test(file.name)) {
+      setActionLabel("File must be a .json export");
+      setTimeout(() => setActionLabel(""), 4000);
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setActionLabel("File too large (max 2MB)");
+      setTimeout(() => setActionLabel(""), 4000);
+      return;
+    }
+
+    setUploading(true);
+    setActionLabel("Uploading cookies...");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("vendorSlug", slug);
+    if (sessionMaxAgeHours) {
+      formData.append("days", String(Math.max(1, Math.floor(sessionMaxAgeHours / 24))));
+    }
+
+    try {
+      const res = await fetch("/api/vendors/auth/upload-cookies", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+
+      setActionLabel(
+        `Connected — ${data.cookieCount} cookies (expires ${new Date(
+          data.expiresAt
+        ).toLocaleDateString()})`
+      );
+      onAuthChange?.();
+    } catch (err) {
+      setActionLabel(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      setTimeout(() => setActionLabel(""), 5000);
+    }
+  };
+
   return (
-    <div className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50">
+    <div className="flex items-center justify-between rounded-xl border border-border/60 p-3.5 transition-colors hover:bg-muted/40">
       <div className="flex items-center gap-3">
-        <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", config.dot)} />
+        <span className={cn("h-2.5 w-2.5 rounded-full shrink-0 ring-2 ring-offset-2 ring-offset-card", config.dot, "ring-" + config.dot.replace("bg-", "") + "/20")} />
         <div>
           <div className="flex items-center gap-2">
             <span className="font-medium">{name}</span>
             {authRequired && (
-              <Badge variant="outline" className="text-xs">
+              <Badge variant="outline" className="text-[10px] rounded-md">
                 Auth Required
               </Badge>
             )}
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="secondary" className="text-[10px] rounded-md">
               {preferredStrategy.toUpperCase()}
             </Badge>
           </div>
@@ -142,26 +194,59 @@ export function VendorCard({
             )}
           </p>
           {actionLabel && (
-            <p className="mt-1 text-xs font-medium text-blue-600">{actionLabel}</p>
+            <p className="mt-1 text-xs font-medium text-primary">{actionLabel}</p>
           )}
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <Badge variant="outline" className={cn("text-xs", config.badge)}>
+        <Badge variant="outline" className={cn("text-[10px] rounded-md", config.badge)}>
           {config.label}
         </Badge>
 
-        {/* Auth-required vendors: Login / Reconnect */}
-        {authRequired && (authStatus === "not_configured" || authStatus === "expired") && (
+        {/* Hidden file input — triggered by Upload button */}
+        {authRequired && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        )}
+
+        {/* Auth-required vendors: Upload Cookies button always visible */}
+        {authRequired && (
           <Button
             variant="outline"
             size="sm"
-            onClick={handleLogin}
-            disabled={loading}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || loading}
+            className="gap-1.5 rounded-lg"
+            title="Upload Cookie-Editor JSON export"
           >
-            {loading ? "Waiting..." : authStatus === "expired" ? "Reconnect" : "Login"}
+            <Upload className="h-3.5 w-3.5" />
+            {uploading
+              ? "Uploading..."
+              : authStatus === "connected"
+                ? "Refresh"
+                : "Upload Cookies"}
           </Button>
         )}
+
+        {/* Auth-required vendors: also show Login (browser flow) when not connected */}
+        {authRequired &&
+          (authStatus === "not_configured" || authStatus === "expired") && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogin}
+              disabled={loading || uploading}
+              className="rounded-lg"
+              title="Open vendor login in a Playwright browser (local only)"
+            >
+              {loading ? "Waiting..." : authStatus === "expired" ? "Reconnect" : "Login"}
+            </Button>
+          )}
 
         {/* Connected vendors: Health check + Disconnect */}
         {authRequired && authStatus === "connected" && (
@@ -170,7 +255,8 @@ export function VendorCard({
               variant="ghost"
               size="sm"
               onClick={handleHealthCheck}
-              disabled={loading}
+              disabled={loading || uploading}
+              className="rounded-lg"
             >
               Check
             </Button>
@@ -178,8 +264,8 @@ export function VendorCard({
               variant="ghost"
               size="sm"
               onClick={handleDisconnect}
-              disabled={loading}
-              className="text-destructive hover:text-destructive"
+              disabled={loading || uploading}
+              className="text-destructive hover:text-destructive rounded-lg"
             >
               Disconnect
             </Button>

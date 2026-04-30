@@ -155,6 +155,20 @@ export function VendorList() {
 
   return (
     <div className="space-y-6">
+      {/* Cookie upload help banner */}
+      <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4 text-sm">
+        <p className="font-semibold text-foreground mb-1">
+          How to refresh a vendor session
+        </p>
+        <p className="text-muted-foreground leading-relaxed">
+          1. Install <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">Cookie-Editor</span>{" "}
+          extension in your browser. 2. Log into the vendor site. 3. Click the extension, choose{" "}
+          <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">Export → Export as JSON</span>,
+          then save to a file. 4. Click <span className="font-medium text-foreground">Upload Cookies</span> below
+          and select the file. Sessions typically last 2–14 days depending on the vendor.
+        </p>
+      </div>
+
       {/* Summary bar */}
       <div className="flex items-center justify-between">
         <div className="flex flex-wrap gap-3">
