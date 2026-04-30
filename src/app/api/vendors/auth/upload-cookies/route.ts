@@ -83,6 +83,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate that the cookies actually belong to this vendor.
+    // Without this, the operator can accidentally upload one vendor's
+    // export onto another's slot — the file gets saved, status flips to
+    // "connected", but every search fails because the cookies have the
+    // wrong domain.
+    let expectedHost: string | null = null;
+    try {
+      expectedHost = new URL(vendor.baseUrl).hostname.replace(/^www\./, "");
+    } catch {
+      expectedHost = null;
+    }
+
+    if (expectedHost) {
+      const matchingCookies = cookies.filter((c) => {
+        const d = (c.domain || "").replace(/^\./, "").replace(/^www\./, "");
+        return d === expectedHost || d.endsWith("." + expectedHost);
+      });
+
+      if (matchingCookies.length === 0) {
+        const seenDomains = Array.from(
+          new Set(
+            cookies
+              .map((c) => (c.domain || "").replace(/^\./, ""))
+              .filter(Boolean)
+          )
+        ).slice(0, 5);
+        return NextResponse.json(
+          {
+            error: `These cookies don't belong to ${vendor.name} (expected ${expectedHost}). Found cookies for: ${seenDomains.join(", ") || "unknown domains"}`,
+          },
+          { status: 400 }
+        );
+      }
+
+      logger.info(
+        {
+          vendorSlug,
+          expectedHost,
+          totalCookies: cookies.length,
+          matchingCookies: matchingCookies.length,
+        },
+        "Cookie domain validation passed"
+      );
+    }
+
     const result = await importCookiesForVendor(vendorSlug, cookies, days);
 
     logger.info(
