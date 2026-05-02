@@ -79,6 +79,8 @@ export async function POST(request: NextRequest) {
                   currency: r.outcome.result?.currency,
                   inStock: r.outcome.result?.inStock,
                   deliveryEstimate: r.outcome.result?.deliveryEstimate,
+                  reviewCount: r.outcome.result?.reviewCount,
+                  starRating: r.outcome.result?.starRating,
                   source: r.outcome.source,
                   durationMs: r.outcome.durationMs,
                   error: r.outcome.error,

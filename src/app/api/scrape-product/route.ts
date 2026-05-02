@@ -26,8 +26,8 @@ const VENDOR_DOMAIN_MAP: Record<string, string> = {
   "www.officebasics.com": "officebasics",
   "webstaurantstore.com": "webstaurant",
   "www.webstaurantstore.com": "webstaurant",
-  "quippers.com": "equippers",
-  "www.quippers.com": "equippers",
+  "equippers.com": "equippers",
+  "www.equippers.com": "equippers",
 };
 
 function detectVendorFromUrl(url: string): string | null {

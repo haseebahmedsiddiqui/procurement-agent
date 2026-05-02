@@ -6,7 +6,7 @@ export const vendorsSeed = [
     category: "stationery",
     enabled: true,
     baseUrl: "https://www.amazon.com",
-    searchUrlPattern: "https://www.amazon.com/s?k={{query}}",
+    searchUrlPattern: "https://www.amazon.com/s?k={{query}}&p_85=2470955011&p_72=1248879011&s=price-asc-rank",
     authRequired: false,
     authType: "none" as const,
     loginUrl: "https://www.amazon.com/ap/signin",
@@ -17,7 +17,7 @@ export const vendorsSeed = [
     rateLimitMs: 2000,
     cacheFreshnessHours: 24,
     extractionHints:
-      "Amazon uses ASINs as product IDs. Look for Prime pricing. Prices shown per unit or per pack. Check 'Subscribe & Save' vs one-time price.",
+      "Amazon uses ASINs as product IDs. Results are pre-filtered: Prime-eligible only, 4+ star ratings, sorted price low-to-high. Prefer products with higher review counts — they indicate most-ordered items. Prices shown per unit or per pack. Check 'Subscribe & Save' vs one-time price.",
     searchQueryTemplate:
       "Use consumer-friendly terms. Include brand names if known. Add 'pack' or 'box' for bulk items.",
     healthStatus: "healthy" as const,
@@ -96,7 +96,7 @@ export const vendorsSeed = [
     category: "deck_engine",
     enabled: true,
     baseUrl: "https://www.amazon.com",
-    searchUrlPattern: "https://www.amazon.com/s?k={{query}}",
+    searchUrlPattern: "https://www.amazon.com/s?k={{query}}&p_85=2470955011&p_72=1248879011&s=price-asc-rank",
     authRequired: false,
     authType: "none" as const,
     sessionMaxAgeHours: 336,
@@ -105,7 +105,7 @@ export const vendorsSeed = [
     rateLimitMs: 2000,
     cacheFreshnessHours: 24,
     extractionHints:
-      "For industrial/marine items on Amazon, look for industrial & scientific category results. Prices per unit. Check seller ratings.",
+      "For industrial/marine items on Amazon, results are pre-filtered: Prime-eligible only, 4+ star ratings, sorted price low-to-high. Look for industrial & scientific category results. Prefer products with higher review counts as they indicate most-ordered items. Prices per unit.",
     searchQueryTemplate:
       "Use plain consumer terms — Amazon listings rarely self-describe as 'marine grade' or 'industrial'. Include material (steel, brass) and key dimensions only if in the RFQ. Brand + model number is best when known.",
     healthStatus: "healthy" as const,
@@ -162,7 +162,7 @@ export const vendorsSeed = [
     category: "galley_kitchen",
     enabled: true,
     baseUrl: "https://www.amazon.com",
-    searchUrlPattern: "https://www.amazon.com/s?k={{query}}",
+    searchUrlPattern: "https://www.amazon.com/s?k={{query}}&p_85=2470955011&p_72=1248879011&s=price-asc-rank",
     authRequired: false,
     authType: "none" as const,
     sessionMaxAgeHours: 336,
@@ -171,7 +171,7 @@ export const vendorsSeed = [
     rateLimitMs: 2000,
     cacheFreshnessHours: 24,
     extractionHints:
-      "For kitchen/galley items on Amazon, look for restaurant supply and commercial kitchen results. Check for NSF certification mentions.",
+      "For kitchen/galley items on Amazon, results are pre-filtered: Prime-eligible only, 4+ star ratings, sorted price low-to-high. Look for restaurant supply and commercial kitchen results. Prefer products with higher review counts as they indicate most-ordered items. Check for NSF certification mentions.",
     searchQueryTemplate:
       "Use plain consumer terms — Amazon listings rarely self-describe as 'commercial' or 'restaurant grade'. Include material and key dimensions only if in the RFQ. Brand + model number is best when known.",
     healthStatus: "healthy" as const,
@@ -202,8 +202,8 @@ export const vendorsSeed = [
     slug: "equippers",
     category: "galley_kitchen",
     enabled: true,
-    baseUrl: "https://www.quippers.com",
-    searchUrlPattern: "https://www.quippers.com/search?q={{query}}",
+    baseUrl: "https://www.equippers.com",
+    searchUrlPattern: "https://www.equippers.com/search?q={{query}}",
     authRequired: false,
     authType: "none" as const,
     sessionMaxAgeHours: 168,

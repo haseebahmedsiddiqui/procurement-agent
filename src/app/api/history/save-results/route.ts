@@ -11,6 +11,8 @@ interface VendorResultPayload {
   price?: number;
   currency?: string;
   inStock?: boolean;
+  reviewCount?: number;
+  starRating?: number;
   source?: string;
   error?: string;
 }
@@ -51,6 +53,8 @@ export async function POST(request: NextRequest) {
         price: r.price,
         currency: r.currency,
         inStock: r.inStock,
+        reviewCount: r.reviewCount,
+        starRating: r.starRating,
         source: r.source,
         error: r.error,
       })),

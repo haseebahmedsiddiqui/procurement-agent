@@ -76,18 +76,20 @@ export class AmazonAdapter extends BaseVendorAdapter {
         return null;
       }
 
-      // Slight scroll to trigger any lazy-loaded prices
+      // Scroll to trigger lazy-loaded prices and review counts
+      await page.evaluate(() => window.scrollBy(0, 900));
+      await page.waitForTimeout(600);
       await page.evaluate(() => window.scrollBy(0, 600));
-      await page.waitForTimeout(400);
+      await page.waitForTimeout(300);
 
-      // Pre-extract: pull just the first 8 product cards' outerHTML so the
-      // LLM sees dense product data, not a 500KB navigation shell.
+      // Pre-extract: first 10 cards — wider net since Prime+4★ filter reduces
+      // the result set; more cards gives the AI better coverage.
       const cardsHtml = await page.evaluate(() => {
         const cards = document.querySelectorAll(
           '[data-component-type="s-search-result"]'
         );
         return Array.from(cards)
-          .slice(0, 8)
+          .slice(0, 10)
           .map((c) => (c as HTMLElement).outerHTML)
           .join("\n\n");
       });

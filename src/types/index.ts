@@ -100,6 +100,8 @@ export interface SearchResult {
   currency: string;
   inStock: boolean;
   deliveryEstimate?: string;
+  reviewCount?: number;
+  starRating?: number;
   confidence: MatchConfidence;
   reasoning: string;
 }

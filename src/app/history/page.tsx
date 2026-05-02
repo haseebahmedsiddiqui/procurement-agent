@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   XCircle,
   Eye,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +59,8 @@ interface VendorResult {
   price?: number;
   currency?: string;
   inStock?: boolean;
+  reviewCount?: number;
+  starRating?: number;
   source?: string;
   error?: string;
 }
@@ -239,6 +242,23 @@ function RunDetailView({ detail, runIndex }: { detail: RFQDetail; runIndex: numb
                               </Badge>
                             )}
                           </div>
+                          {(result.starRating || result.reviewCount) && (
+                            <div className="flex items-center gap-1">
+                              {result.starRating && (
+                                <span className="inline-flex items-center gap-0.5 text-amber-500">
+                                  <Star className="h-2.5 w-2.5 fill-amber-500" />
+                                  <span className="text-[10px] font-medium text-foreground">
+                                    {result.starRating.toFixed(1)}
+                                  </span>
+                                </span>
+                              )}
+                              {result.reviewCount && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  ({result.reviewCount.toLocaleString()})
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                     );

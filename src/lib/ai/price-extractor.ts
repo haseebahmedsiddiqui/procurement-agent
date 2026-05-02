@@ -16,6 +16,8 @@ const RawExtractedProductSchema = z.object({
   inStock: z.boolean().nullable().optional(),
   deliveryEstimate: z.string().nullable().optional(),
   imageUrl: z.string().nullable().optional(),
+  reviewCount: z.number().nullable().optional(),
+  starRating: z.number().nullable().optional(),
 });
 
 const RawExtractionResultSchema = z.object({
@@ -33,6 +35,8 @@ export interface ExtractedProduct {
   inStock: boolean;
   deliveryEstimate?: string;
   imageUrl?: string;
+  reviewCount?: number;
+  starRating?: number;
 }
 
 /**
@@ -80,7 +84,12 @@ VENDOR HINTS: ${extractionHints}
 HTML CONTENT:
 ${truncatedHtml}
 
-Extract the TOP 3 most relevant products. For each product, provide:
+Extract the TOP 3 most relevant products. Rank them by:
+1. Relevance to the search query (most important)
+2. For Amazon results: prefer products with a higher review count (more reviews = more orders = more trusted)
+3. Among equally relevant products, pick the one with more reviews over the one with fewer
+
+For each product, provide:
 - productName: the full product name
 - productId: the vendor's product ID (ASIN for Amazon, SKU for Staples, etc.)
 - productUrl: full URL to the product page
@@ -90,6 +99,8 @@ Extract the TOP 3 most relevant products. For each product, provide:
 - inStock: true/false
 - deliveryEstimate: shipping estimate if visible
 - imageUrl: product image URL if visible
+- reviewCount: number of customer reviews/ratings shown (e.g. 1234 from "1,234 ratings") — null if not shown
+- starRating: star rating as decimal (e.g. 4.5) — null if not shown
 
 Respond with ONLY valid JSON:
 {
@@ -153,6 +164,8 @@ If no products were found or the page shows an error/captcha, return:
           inStock: p.inStock ?? true,
           deliveryEstimate: p.deliveryEstimate ?? undefined,
           imageUrl: p.imageUrl ?? undefined,
+          reviewCount: p.reviewCount ?? undefined,
+          starRating: p.starRating ?? undefined,
         });
       } else {
         dropped++;

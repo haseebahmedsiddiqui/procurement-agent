@@ -21,6 +21,8 @@ const vendorResultSchema = new Schema(
     price: { type: Number },
     currency: { type: String },
     inStock: { type: Boolean },
+    reviewCount: { type: Number },
+    starRating: { type: Number },
     source: { type: String },
     error: { type: String },
   },

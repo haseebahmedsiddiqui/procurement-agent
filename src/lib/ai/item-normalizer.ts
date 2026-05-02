@@ -109,6 +109,7 @@ Rules:
 - For Staples/OfficeDepot: use standard office supply terms
 - For Webstaurant/Equippers: vendor catalog is already commercial — do NOT add the word "commercial" as a qualifier (it's redundant noise)
 - Keep queries concise (3-6 words typically)
+- IMPA codes: if an item has [IMPA: XXXXXX], use the code to infer the exact product type and include its key identifying details in the normalizedName. Do NOT include the IMPA number itself in any search query — vendors don't index by IMPA code. Instead, use the IMPA code to understand what the product IS so you write a more accurate search query.
 
 CRITICAL — qualifiers that destroy recall:
 Do NOT add the words "marine grade", "commercial", "restaurant grade", "industrial",

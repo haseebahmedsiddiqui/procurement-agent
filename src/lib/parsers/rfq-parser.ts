@@ -25,8 +25,10 @@ const COLUMN_PATTERNS = {
     /particulars/i, /specification/i, /^name$/i, /item\s*desc/i,
   ],
   impaCode: [
-    /impa\s*no/i, /impa\s*code/i, /impa\s*#/i, /^impa$/i, /^code$/i,
-    /item\s*code/i, /cat\s*no/i, /catalog/i,
+    // Broad leading-match catches IMPA, IMPA NO, IMPA CODE, IMPA NUMBER,
+    // IMPA_NO, IMPA-CODE, IMPA Ref, etc. "IMPA SECTION" is excluded below.
+    /^impa/i,
+    /^code$/i, /item\s*code/i, /cat\s*no/i, /catalog/i,
   ],
   quantity: [
     /qty/i, /quantity/i, /^q$/i, /^qnty$/i, /required\s*qty/i,
@@ -111,7 +113,10 @@ function findHeaderRow(
     let nonEmptyCount = 0;
 
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-      const val = cell.text?.toString().replace(/[\s\n\r]+/g, " ").trim() || "";
+      const raw =
+        cell.text?.toString().trim() ||
+        (cell.value !== null && cell.value !== undefined ? String(cell.value) : "");
+      const val = raw.replace(/[\s\n\r]+/g, " ").trim();
       values[colNumber - 1] = val;
       if (val) nonEmptyCount++;
     });
@@ -134,8 +139,14 @@ function findHeaderRow(
 function getCellValue(row: ExcelJS.Row, colIndex: number | null): string {
   if (colIndex === null) return "";
   const cell = row.getCell(colIndex + 1); // ExcelJS is 1-indexed
-  // Normalize: strip control chars + collapse whitespace
-  return (cell.text?.toString() || "")
+
+  // cell.text is empty for numeric/date cells that have no explicit format string.
+  // Fall back to cell.value so IMPA codes stored as plain numbers are not dropped.
+  const raw =
+    cell.text?.toString().trim() ||
+    (cell.value !== null && cell.value !== undefined ? String(cell.value) : "");
+
+  return raw
     .replace(/[\x00-\x1f\x7f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();

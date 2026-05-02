@@ -26,6 +26,8 @@ export interface VendorSearchResult {
   inStock: boolean;
   deliveryEstimate?: string;
   imageUrl?: string;
+  reviewCount?: number;
+  starRating?: number;
   rawHtml?: string; // For debugging
 }
 
@@ -421,6 +423,8 @@ export abstract class BaseVendorAdapter {
       inStock: best.inStock,
       deliveryEstimate: best.deliveryEstimate,
       imageUrl: best.imageUrl,
+      reviewCount: best.reviewCount,
+      starRating: best.starRating,
     };
   }
 

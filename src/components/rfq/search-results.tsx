@@ -26,6 +26,7 @@ import {
   Ban,
   Plus,
   Link as LinkIcon,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NormalizedItem } from "@/lib/ai/item-normalizer";
@@ -39,6 +40,8 @@ interface VendorResult {
   currency?: string;
   inStock?: boolean;
   deliveryEstimate?: string;
+  reviewCount?: number;
+  starRating?: number;
   source: string;
   durationMs: number;
   error?: string;
@@ -729,6 +732,24 @@ export function SearchResults({
                                   </Badge>
                                 )}
                               </div>
+                              {/* Review count + star rating (Amazon) */}
+                              {(vr.starRating || vr.reviewCount) && (
+                                <div className="flex items-center gap-1">
+                                  {vr.starRating && (
+                                    <span className="inline-flex items-center gap-0.5 text-amber-500">
+                                      <Star className="h-3 w-3 fill-amber-500" />
+                                      <span className="text-[11px] font-medium text-foreground">
+                                        {vr.starRating.toFixed(1)}
+                                      </span>
+                                    </span>
+                                  )}
+                                  {vr.reviewCount && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      ({vr.reviewCount.toLocaleString()} reviews)
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                               <p className="text-[10px] text-muted-foreground">
                                 {vr.productId} &middot; {vr.source} &middot; {vr.durationMs}ms
                               </p>
