@@ -118,6 +118,20 @@ export default function HomePage() {
     inStock?: boolean; deliveryEstimate?: string; source: string;
     durationMs: number; error?: string; errorType?: string;
   }>>>({});
+  const [internalMatches, setInternalMatches] = useState<Record<number, {
+    primary: {
+      itemCode: string;
+      description: string;
+      unitOfMeasure: string;
+      rank: "A"|"B"|"C"|"D"|"E"|null;
+      derivedUnitCost: number | null;
+      isActive: boolean;
+      pyrUnits: number;
+      pyrSalesUsd: number;
+    } | null;
+    confidence: number;
+    reasoning: string;
+  }>>({});
   const [searchSummary, setSearchSummary] = useState({ totalItems: 0, totalVendors: 0, totalResults: 0, totalFailures: 0 });
   const [searchLogs, setSearchLogs] = useState<LogLine[]>([]);
   const [searchProgress, setSearchProgress] = useState<{
@@ -315,6 +329,16 @@ export default function HomePage() {
           next[itemIndex] = [...filtered, vendorResult];
           return next;
         });
+      } else if (type === "internal_match") {
+        const itemIndex = event.itemIndex as number;
+        setInternalMatches((prev) => ({
+          ...prev,
+          [itemIndex]: {
+            primary: event.primary as typeof prev[number]["primary"],
+            confidence: event.confidence as number,
+            reasoning: event.reasoning as string,
+          },
+        }));
       } else if (type === "summary") {
         setSearchSummary({
           totalItems: event.totalItems as number,
@@ -346,6 +370,7 @@ export default function HomePage() {
     setStep("searching");
     setSearchLogs([]);
     setSearchResults({});
+    setInternalMatches({});
     setSearchProgress(null);
     setSearchSummary({ totalItems: 0, totalVendors: 0, totalResults: 0, totalFailures: 0 });
 
@@ -497,6 +522,7 @@ export default function HomePage() {
     setItemOverrides({});
     setSearchQueryOverrides({});
     setSearchResults({});
+    setInternalMatches({});
     setSearchLogs([]);
     setSearchProgress(null);
     setResultsSaved(false);
@@ -730,6 +756,7 @@ export default function HomePage() {
         <SearchResults
           items={uploadData.items}
           results={searchResults}
+          internalMatches={internalMatches}
           vendorSlugs={allSelectedSlugs}
           itemCategoryMap={Object.fromEntries(
             uploadData.detection.groups.flatMap((g) =>

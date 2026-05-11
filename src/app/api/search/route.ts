@@ -4,7 +4,8 @@ import {
   type ItemSearchRequest,
   type VendorItemResult,
 } from "@/lib/vendors/search-engine";
-import { logEventStorage } from "@/lib/logger";
+import { matchInventoryItem } from "@/lib/inventory/matcher";
+import { logEventStorage, logger } from "@/lib/logger";
 
 /**
  * Streaming NDJSON search endpoint.
@@ -61,6 +62,35 @@ export async function POST(request: NextRequest) {
           async () => {
             const allResults: VendorItemResult[] = [];
 
+            // Kick off internal-inventory matching in parallel with vendor
+            // search. Each item is matched independently and the result is
+            // streamed back as soon as it lands. Errors are isolated so a
+            // bad match doesn't block vendor search.
+            const inventoryPromise = Promise.allSettled(
+              items.map(async (item) => {
+                try {
+                  const match = await matchInventoryItem({
+                    rfqDescription: item.rfqDescription,
+                    normalizedName: item.normalizedName,
+                  });
+                  emit({
+                    type: "internal_match",
+                    ts: Date.now(),
+                    itemIndex: item.index,
+                    primary: match.primary,
+                    confidence: match.confidence,
+                    reasoning: match.reasoning,
+                    alternates: match.alternates,
+                  });
+                } catch (err) {
+                  logger.warn(
+                    { err, itemIndex: item.index },
+                    "Inventory match failed for item"
+                  );
+                }
+              })
+            );
+
             await searchVendors(items, vendorSlugs, {
               signal: request.signal,
               onProgress: (p) =>
@@ -88,6 +118,10 @@ export async function POST(request: NextRequest) {
                 });
               },
             });
+
+            // Wait for any inventory matches still in flight so the summary
+            // event reflects the complete state.
+            await inventoryPromise;
 
             const totalResults = allResults.filter((r) => r.outcome.result).length;
             const totalFailures = allResults.filter((r) => !r.outcome.result).length;

@@ -4,3 +4,5 @@ export { Item } from "./Item";
 export { Price } from "./Price";
 export { RFQ } from "./RFQ";
 export { MatchFeedback } from "./MatchFeedback";
+export { InventoryItem } from "./InventoryItem";
+export { InventoryImport } from "./InventoryImport";

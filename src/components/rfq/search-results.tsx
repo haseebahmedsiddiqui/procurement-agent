@@ -27,6 +27,7 @@ import {
   Plus,
   Link as LinkIcon,
   Star,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NormalizedItem } from "@/lib/ai/item-normalizer";
@@ -66,9 +67,27 @@ interface ScrapedProduct {
   imageUrl?: string;
 }
 
+interface InternalMatchPrimary {
+  itemCode: string;
+  description: string;
+  unitOfMeasure: string;
+  rank: "A" | "B" | "C" | "D" | "E" | null;
+  derivedUnitCost: number | null;
+  isActive: boolean;
+  pyrUnits: number;
+  pyrSalesUsd: number;
+}
+
+interface InternalMatch {
+  primary: InternalMatchPrimary | null;
+  confidence: number;
+  reasoning: string;
+}
+
 interface SearchResultsProps {
   items: RFQItem[];
   results: Record<number, VendorResult[]>;
+  internalMatches?: Record<number, InternalMatch>;
   vendorSlugs: string[];
   itemCategoryMap: Record<number, string>;
   normalizedItems?: NormalizedItem[];
@@ -87,6 +106,7 @@ type SaveStatus = "idle" | "saving" | "success" | "error";
 export function SearchResults({
   items,
   results,
+  internalMatches,
   vendorSlugs,
   itemCategoryMap,
   normalizedItems,
@@ -389,6 +409,91 @@ export function SearchResults({
 
   // ---------- render helpers ----------
 
+  function renderInternalCell(
+    match: InternalMatch | undefined,
+    cheapestVendorPrice: number | null
+  ) {
+    if (!match) {
+      return (
+        <div className="flex items-center justify-center py-2">
+          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/50" />
+        </div>
+      );
+    }
+
+    if (!match.primary || match.confidence < 0.4) {
+      return (
+        <span className="text-xs text-muted-foreground" title={match.reasoning}>
+          —
+        </span>
+      );
+    }
+
+    const p = match.primary;
+    const isStrong = match.confidence >= 0.7;
+    const muted = !p.isActive;
+
+    // Cost-deviation flag: vendor price more than 30% above the historical
+    // unit cost is a useful negotiating signal.
+    const overpaying =
+      p.derivedUnitCost && cheapestVendorPrice
+        ? cheapestVendorPrice / p.derivedUnitCost - 1
+        : null;
+
+    return (
+      <div
+        className={cn(
+          "rounded-lg p-2.5 -m-1 space-y-1.5 text-left",
+          isStrong ? "ring-1 ring-primary/40 bg-primary/[0.04]" : "ring-1 ring-amber-300/40 bg-amber-50/40",
+          muted && "opacity-70"
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-mono text-xs font-semibold">{p.itemCode}</span>
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-[9px] h-4",
+              isStrong ? "bg-primary/10 text-primary" : "bg-amber-100 text-amber-800"
+            )}
+          >
+            {isStrong ? "Stocked" : "Possible"}
+          </Badge>
+        </div>
+        {p.description && (
+          <p className="text-xs leading-snug line-clamp-2" title={p.description}>
+            {p.description}
+          </p>
+        )}
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          {p.derivedUnitCost !== null ? (
+            <span className="font-bold text-sm tabular-nums">
+              ${p.derivedUnitCost.toFixed(2)}
+              <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                / {p.unitOfMeasure || "unit"}
+              </span>
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">no historical cost</span>
+          )}
+          {p.rank && (
+            <Badge variant="outline" className="text-[9px] h-4">
+              {p.rank}
+            </Badge>
+          )}
+        </div>
+        {overpaying !== null && overpaying > 0.3 && (
+          <p className="text-[10px] font-medium text-amber-700">
+            Vendor +{Math.round(overpaying * 100)}% vs historical
+          </p>
+        )}
+        {!p.isActive && (
+          <p className="text-[10px] text-muted-foreground italic">dormant SKU</p>
+        )}
+      </div>
+    );
+  }
+
   function renderManualProduct(key: string, product: ScrapedProduct) {
     return (
       <div className="rounded-lg p-2.5 -m-1 space-y-1.5 ring-1 ring-primary/40 bg-primary/5">
@@ -606,6 +711,12 @@ export function SearchResults({
                   <TableHead className="min-w-[200px] sticky left-12 bg-muted/30">
                     RFQ Item
                   </TableHead>
+                  <TableHead className="min-w-[200px] text-center">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Package className="h-3.5 w-3.5 text-primary" />
+                      Internal
+                    </span>
+                  </TableHead>
                   {vendorSlugs.map((slug) => (
                     <TableHead key={slug} className="min-w-[250px] text-center">
                       {slug}
@@ -627,6 +738,12 @@ export function SearchResults({
                         ).vendorSlug
                       : null;
 
+                  const inv = internalMatches?.[idx];
+                  const cheapestVendorPrice =
+                    priced.length > 0
+                      ? Math.min(...priced.map((r) => r.price ?? Infinity))
+                      : null;
+
                   return (
                     <TableRow key={idx} className="group">
                       <TableCell className="text-muted-foreground text-xs sticky left-0 bg-background group-hover:bg-muted/20">
@@ -644,6 +761,9 @@ export function SearchResults({
                             )}
                           </p>
                         </div>
+                      </TableCell>
+                      <TableCell className="align-top">
+                        {renderInternalCell(inv, cheapestVendorPrice)}
                       </TableCell>
                       {vendorSlugs.map((slug) => {
                         const vr = itemResults.find((r) => r.vendorSlug === slug);

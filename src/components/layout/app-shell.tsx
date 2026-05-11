@@ -7,6 +7,7 @@ import {
   Upload,
   History,
   BookOpen,
+  Package,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -16,6 +17,7 @@ import { VendorStatusBar } from "./vendor-status-bar";
 const navItems = [
   { href: "/", label: "Upload RFQ", icon: Upload },
   { href: "/history", label: "History", icon: History },
+  { href: "/inventory", label: "Inventory", icon: Package },
   { href: "/dictionary", label: "Dictionary", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
