@@ -821,8 +821,17 @@ export default function HomePage() {
 
   const allSelectedSlugs = Object.values(selectedVendors).flat();
 
+  // Wider container during results so the comparison table breathes; the
+  // earlier upload / picker / review steps stay narrower for reading comfort.
+  const isResultsView = step === "results";
+
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div
+      className={cn(
+        "mx-auto space-y-8",
+        isResultsView ? "max-w-[1600px] px-1 lg:px-2" : "max-w-6xl"
+      )}
+    >
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>

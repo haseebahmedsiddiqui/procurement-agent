@@ -598,29 +598,40 @@ export function SearchResults({
     // 1. Manual-pick view — overrides any auto-match
     if (manualPick && action === "manual") {
       return (
-        <div className="rounded-lg p-2.5 -m-1 space-y-1.5 text-left ring-1 ring-primary/40 bg-primary/[0.06]">
+        <div className="rounded-lg p-2.5 -m-1 space-y-1.5 text-left ring-2 ring-indigo-400/50 bg-indigo-50/40">
           <div className="flex items-center justify-between gap-2">
             <span className="font-mono text-xs font-semibold">{manualPick.itemCode}</span>
-            <Badge className="text-[9px] h-4 bg-primary/15 text-primary">Manual</Badge>
+            <Badge className="text-[9px] h-4 bg-indigo-500/15 text-indigo-700 border-indigo-200">
+              Manual pick
+            </Badge>
           </div>
           {manualPick.description && (
             <p className="text-xs leading-snug line-clamp-2" title={manualPick.description}>
               {manualPick.description}
             </p>
           )}
-          {manualPick.derivedUnitCost !== null && (
-            <span className="font-bold text-sm tabular-nums">
-              ${manualPick.derivedUnitCost.toFixed(2)}
-              <span className="ml-1 text-[10px] font-normal text-muted-foreground">
-                / {manualPick.unitOfMeasure || "unit"}
+          <div className="flex items-baseline gap-2">
+            {manualPick.derivedUnitCost !== null ? (
+              <span className="font-bold text-sm tabular-nums">
+                ${manualPick.derivedUnitCost.toFixed(2)}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                  / {manualPick.unitOfMeasure || "unit"}
+                </span>
               </span>
-            </span>
-          )}
+            ) : (
+              <span className="text-[11px] text-muted-foreground">no historical cost</span>
+            )}
+            {manualPick.rank && (
+              <Badge variant="outline" className="text-[9px] h-4">
+                {manualPick.rank}
+              </Badge>
+            )}
+          </div>
           <button
             className="text-[10px] text-muted-foreground hover:text-foreground underline"
             onClick={() => clearInventoryAction(itemIndex, manualPick.id)}
           >
-            Undo
+            Undo manual pick
           </button>
         </div>
       );
@@ -685,25 +696,24 @@ export function SearchResults({
       );
     }
 
-    if (!match) {
-      return (
-        <div className="flex items-center justify-center py-2">
-          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/50" />
-        </div>
-      );
-    }
-
-    // 3. No-match cell — still let the user pick manually
-    if (!match.primary || match.confidence < 0.4) {
+    // No match — either the inventory matcher hasn't run for this item yet
+    // (rare; only during a fresh search before the event lands) or it ran
+    // and returned no candidates. Either way, render the empty state so the
+    // user can pick manually. The "still loading" indicator lives on the
+    // searching-step screen, not in this table.
+    if (!match || !match.primary || match.confidence < 0.4) {
       return (
         <div className="flex flex-col items-center gap-1.5 py-1">
-          <span className="text-xs text-muted-foreground" title={match.reasoning}>
+          <span
+            className="text-sm text-muted-foreground"
+            title={match?.reasoning || "No inventory match"}
+          >
             —
           </span>
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 text-[10px] px-2 gap-1 text-primary"
+            className="h-7 text-[11px] px-2 gap-1 text-primary"
             onClick={() => openSkuPicker(itemIndex)}
           >
             <Plus className="h-3 w-3" />
@@ -774,9 +784,9 @@ export function SearchResults({
           <p className="text-[10px] text-muted-foreground italic">dormant SKU</p>
         )}
 
-        {/* Action buttons */}
+        {/* Action buttons — same row alignment as vendor cells for visual rhythm */}
         {!action ? (
-          <div className="flex gap-1 pt-0.5">
+          <div className="flex items-center gap-1 pt-1 border-t border-border/30">
             <Button
               size="sm"
               variant="outline"
@@ -795,15 +805,14 @@ export function SearchResults({
               <XCircle className="h-3 w-3" />
               Reject
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 text-[10px] px-2 gap-1 text-muted-foreground"
+            <button
               onClick={() => openSkuPicker(itemIndex)}
               title="Pick a different SKU from inventory"
+              className="ml-auto inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary px-1.5 py-0.5 rounded transition-colors"
             >
               <Plus className="h-3 w-3" />
-            </Button>
+              Change
+            </button>
           </div>
         ) : (
           <Badge
@@ -816,7 +825,7 @@ export function SearchResults({
             )}
             onClick={() => clearInventoryAction(itemIndex, p.id)}
           >
-            {action === "confirmed" ? "Confirmed" : "Rejected"} (undo)
+            {action === "confirmed" ? "✓ Confirmed" : "✗ Rejected"} (undo)
           </Badge>
         )}
       </div>
@@ -1054,25 +1063,30 @@ export function SearchResults({
 
       {/* Results table */}
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
           <CardTitle className="flex items-center gap-2 text-base">
             <BarChart3 className="h-4 w-4 text-primary" />
             Comparison Results
           </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Tip: hover a vendor column header for the refresh icon · click a SKU code to view that item
+          </p>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead className="w-12 sticky left-0 bg-muted/30">#</TableHead>
-                  <TableHead className="min-w-[200px] sticky left-12 bg-muted/30">
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  <TableHead className="w-14 sticky left-0 bg-muted/30 text-[11px] font-semibold">
+                    #
+                  </TableHead>
+                  <TableHead className="w-[260px] min-w-[260px] sticky left-14 bg-muted/30 text-[11px] font-semibold">
                     RFQ Item
                   </TableHead>
-                  <TableHead className="min-w-[200px] text-center">
+                  <TableHead className="w-[240px] min-w-[240px] sticky left-[324px] bg-muted/30 text-[11px] font-semibold border-r border-border/60">
                     <span className="inline-flex items-center gap-1.5">
                       <Package className="h-3.5 w-3.5 text-primary" />
-                      Internal
+                      Internal Inventory
                     </span>
                   </TableHead>
                   {vendorSlugs.map((slug) => {
@@ -1081,17 +1095,25 @@ export function SearchResults({
                       return acc + (!r || !r.productName || r.error ? 1 : 0);
                     }, 0);
                     return (
-                      <TableHead key={slug} className="min-w-[250px] text-center">
+                      <TableHead
+                        key={slug}
+                        className="w-[280px] min-w-[280px] text-[11px] font-semibold group/header"
+                      >
                         <div className="inline-flex items-center gap-1.5">
-                          <span>{slug}</span>
+                          <span className="capitalize">{slug.replace(/-/g, " ")}</span>
                           {onVendorRefresh && failedCount > 0 && (
                             <button
                               onClick={() => onVendorRefresh(slug)}
                               title={`Re-run ${failedCount} failed cell${failedCount === 1 ? "" : "s"} for ${slug}`}
-                              className="inline-flex items-center justify-center h-5 w-5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
+                              className="inline-flex items-center justify-center h-5 w-5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors opacity-0 group-hover/header:opacity-100 focus:opacity-100"
                             >
                               <RefreshCw className="h-3 w-3" />
                             </button>
+                          )}
+                          {failedCount > 0 && (
+                            <span className="text-[10px] font-normal text-amber-600 ml-1">
+                              {failedCount} failed
+                            </span>
                           )}
                         </div>
                       </TableHead>
@@ -1121,13 +1143,13 @@ export function SearchResults({
 
                   return (
                     <TableRow key={idx} className="group">
-                      <TableCell className="text-muted-foreground text-xs sticky left-0 bg-background group-hover:bg-muted/20">
+                      <TableCell className="w-14 text-muted-foreground text-xs sticky left-0 bg-background group-hover:bg-muted/20 align-top pt-3.5">
                         {item.lineNumber}
                       </TableCell>
-                      <TableCell className="sticky left-12 bg-background group-hover:bg-muted/20">
-                        <div>
+                      <TableCell className="w-[260px] sticky left-14 bg-background group-hover:bg-muted/20 align-top">
+                        <div className="space-y-1">
                           <p className="text-sm font-medium leading-snug">{item.description}</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                          <p className="text-[11px] text-muted-foreground">
                             {item.quantity} {item.unit}
                             {item.impaCode && (
                               <span className="ml-1.5 font-mono text-[10px] bg-muted px-1 py-0.5 rounded">
@@ -1137,7 +1159,7 @@ export function SearchResults({
                           </p>
                         </div>
                       </TableCell>
-                      <TableCell className="align-top">
+                      <TableCell className="w-[240px] sticky left-[324px] bg-background group-hover:bg-muted/20 align-top border-r border-border/60">
                         {renderInternalCell(inv, cheapestVendorPrice, idx)}
                       </TableCell>
                       {vendorSlugs.map((slug) => {
@@ -1179,27 +1201,27 @@ export function SearchResults({
                         }
 
                         return (
-                          <TableCell key={slug} className="align-top">
+                          <TableCell key={slug} className="w-[280px] align-top">
                             <div
                               className={cn(
                                 "rounded-lg p-2.5 -m-1 space-y-1.5 transition-all",
                                 isCheapest &&
                                   action !== "rejected" &&
-                                  "ring-1 ring-emerald-400/60 bg-emerald-50/50",
-                                action === "confirmed" && "bg-primary/5 ring-1 ring-primary/30",
+                                  "ring-1 ring-emerald-400/60 bg-emerald-50/40",
+                                action === "confirmed" && "ring-2 ring-primary/40 bg-primary/[0.04]",
                                 action === "rejected" && "bg-muted/50 opacity-50"
                               )}
                             >
-                              <p className="text-sm font-medium leading-tight">
+                              <p className="text-sm font-medium leading-snug line-clamp-2">
                                 {vr.productUrl ? (
                                   <a
                                     href={vr.productUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="hover:underline inline-flex items-center gap-1"
+                                    className="hover:underline inline-flex items-start gap-1"
                                   >
-                                    {vr.productName}
-                                    <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                                    <span className="line-clamp-2">{vr.productName}</span>
+                                    <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
                                   </a>
                                 ) : (
                                   vr.productName
