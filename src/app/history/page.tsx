@@ -32,7 +32,9 @@ import {
 import { cn } from "@/lib/utils";
 
 interface LastSearchRun {
+  id?: string;
   searchedAt: string;
+  status?: "running" | "completed" | "cancelled" | "failed";
   totalResults: number;
   totalFailures: number;
   vendorSlugs: string[];
@@ -472,6 +474,16 @@ export default function HistoryPage() {
                               <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                               {entry.lastSearchRun.totalResults} matches
                             </span>
+                            {entry.lastSearchRun.status === "running" && (
+                              <Badge className="bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px]">
+                                in progress
+                              </Badge>
+                            )}
+                            {entry.lastSearchRun.status === "cancelled" && (
+                              <Badge className="bg-amber-50 text-amber-700 border border-amber-200 rounded-md text-[10px]">
+                                interrupted
+                              </Badge>
+                            )}
                           </>
                         )}
                         <span className="text-muted-foreground">|</span>
@@ -491,12 +503,34 @@ export default function HistoryPage() {
                         <Eye className="h-3.5 w-3.5" />
                         View
                       </Button>
-                      <Link href={`/?rfq=${entry.id}`}>
-                        <Button size="sm" className="gap-1.5 rounded-lg shadow-sm shadow-primary/25">
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          Re-run
-                        </Button>
-                      </Link>
+                      {/* Primary action depends on the latest run's status:
+                          - completed → Edit (open saved results)
+                          - running/cancelled → Resume (re-run missing pairs)
+                          - no runs → Re-run (start fresh) */}
+                      {entry.lastSearchRun?.status === "completed" ? (
+                        <Link href={`/?rfq=${entry.id}&mode=edit`}>
+                          <Button size="sm" className="gap-1.5 rounded-lg shadow-sm shadow-primary/25">
+                            <Eye className="h-3.5 w-3.5" />
+                            Edit
+                          </Button>
+                        </Link>
+                      ) : entry.lastSearchRun &&
+                        (entry.lastSearchRun.status === "running" ||
+                          entry.lastSearchRun.status === "cancelled") ? (
+                        <Link href={`/?rfq=${entry.id}&mode=resume`}>
+                          <Button size="sm" className="gap-1.5 rounded-lg shadow-sm shadow-amber-500/25 bg-amber-600 hover:bg-amber-700">
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Resume
+                          </Button>
+                        </Link>
+                      ) : (
+                        <Link href={`/?rfq=${entry.id}`}>
+                          <Button size="sm" className="gap-1.5 rounded-lg shadow-sm shadow-primary/25">
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Re-run
+                          </Button>
+                        </Link>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"

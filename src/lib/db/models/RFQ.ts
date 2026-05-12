@@ -40,6 +40,17 @@ const searchRunItemSchema = new Schema(
 const searchRunSchema = new Schema(
   {
     searchedAt: { type: Date, default: Date.now },
+    completedAt: { type: Date, default: null },
+    // running   = client is mid-search and stream-saving partial results
+    // completed = all (item, vendor) pairs attempted; safe to open in edit mode
+    // cancelled = user aborted; partial data preserved; resume covers missing
+    // failed    = unrecoverable error
+    // Legacy docs without this field are treated as "completed" by readers.
+    status: {
+      type: String,
+      enum: ["running", "completed", "cancelled", "failed"],
+      default: "completed",
+    },
     vendorSlugs: [{ type: String }],
     totalResults: { type: Number, default: 0 },
     totalFailures: { type: Number, default: 0 },

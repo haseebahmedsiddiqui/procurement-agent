@@ -25,6 +25,9 @@ export async function GET(
     const searchRuns = (rfq.searchRuns || []).map((run: Record<string, unknown>) => ({
       id: String(run._id),
       searchedAt: run.searchedAt,
+      completedAt: run.completedAt ?? null,
+      // Legacy runs without an explicit status are treated as completed
+      status: (run.status as string) || "completed",
       vendorSlugs: run.vendorSlugs || [],
       totalResults: run.totalResults || 0,
       totalFailures: run.totalFailures || 0,

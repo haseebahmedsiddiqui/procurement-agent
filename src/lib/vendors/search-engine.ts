@@ -22,6 +22,12 @@ export interface ItemSearchRequest {
    * category, so a stationery line doesn't get searched on amazon-deck.
    */
   category?: string;
+  /**
+   * If present, only these vendor slugs will be searched for this item.
+   * Used by resume and per-vendor refresh to re-run a specific subset of
+   * (item, vendor) pairs without disturbing results that already landed.
+   */
+  restrictVendors?: string[];
 }
 
 export interface VendorItemResult {
@@ -101,12 +107,19 @@ export async function searchVendors(
 
   const itemsForVendor = (vendorSlug: string): ItemSearchRequest[] => {
     const vendorCategory = vendorCategoryMap[vendorSlug];
-    // If either the vendor or the item has no category info, fall back to the
-    // old "run everything" behavior so we never silently drop a search.
-    if (!vendorCategory) return items;
-    return items.filter(
-      (it) => !it.category || it.category === vendorCategory
-    );
+    return items.filter((it) => {
+      // Skip if a restrict list is set and this vendor isn't in it. Used by
+      // resume / per-vendor refresh to limit work to specific (item, vendor)
+      // pairs.
+      if (it.restrictVendors && !it.restrictVendors.includes(vendorSlug)) {
+        return false;
+      }
+      // Category gate: a stationery item shouldn't search amazon-deck.
+      if (vendorCategory && it.category && it.category !== vendorCategory) {
+        return false;
+      }
+      return true;
+    });
   };
 
   // Total reflects only the pairs that will actually run

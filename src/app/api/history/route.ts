@@ -59,7 +59,10 @@ export async function GET(request: NextRequest) {
       searchRunCount: r.searchRunCount || 0,
       lastSearchRun: r.lastSearchRun
         ? {
+            id: String(r.lastSearchRun._id),
             searchedAt: r.lastSearchRun.searchedAt,
+            // Legacy runs default to "completed" so history click flows correctly
+            status: r.lastSearchRun.status || "completed",
             totalResults: r.lastSearchRun.totalResults || 0,
             totalFailures: r.lastSearchRun.totalFailures || 0,
             vendorSlugs: r.lastSearchRun.vendorSlugs || [],

@@ -28,6 +28,7 @@ import {
   Link as LinkIcon,
   Star,
   Package,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NormalizedItem } from "@/lib/ai/item-normalizer";
@@ -98,6 +99,10 @@ interface SearchResultsProps {
     totalResults: number;
     totalFailures: number;
   };
+  /** Re-scrape one vendor across all items where it currently failed. */
+  onVendorRefresh?: (vendorSlug: string) => void;
+  /** Re-run all (item, vendor) pairs that have no result yet. */
+  onResume?: () => void;
 }
 
 type MatchAction = "confirmed" | "rejected" | null;
@@ -112,6 +117,8 @@ export function SearchResults({
   normalizedItems,
   filename,
   summary,
+  onVendorRefresh,
+  onResume,
 }: SearchResultsProps) {
   // --- Confirm / Reject state ---
   const [actions, setActions] = useState<Record<string, MatchAction>>({});
@@ -660,8 +667,37 @@ export function SearchResults({
 
   // ---------- main render ----------
 
+  // Count (item, vendor) pairs missing a result. Drives the resume banner.
+  const missingPairCount = items.reduce((acc, _, idx) => {
+    const have = new Set(
+      (results[idx] || []).filter((r) => r.productName).map((r) => r.vendorSlug)
+    );
+    const missing = vendorSlugs.filter((s) => !have.has(s)).length;
+    return acc + missing;
+  }, 0);
+
   return (
     <div className="space-y-4">
+      {/* Resume banner — only shown when results are incomplete and a handler exists */}
+      {onResume && missingPairCount > 0 && (
+        <Card className="border-amber-300/60 bg-amber-50/40">
+          <CardContent className="flex items-center justify-between py-3">
+            <div className="flex items-center gap-2 text-sm">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <span>
+                <span className="font-semibold">{missingPairCount}</span> cell
+                {missingPairCount === 1 ? "" : "s"} with no result yet. The previous
+                run may have been interrupted.
+              </span>
+            </div>
+            <Button size="sm" onClick={onResume} className="gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5" />
+              Resume search
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
@@ -717,11 +753,28 @@ export function SearchResults({
                       Internal
                     </span>
                   </TableHead>
-                  {vendorSlugs.map((slug) => (
-                    <TableHead key={slug} className="min-w-[250px] text-center">
-                      {slug}
-                    </TableHead>
-                  ))}
+                  {vendorSlugs.map((slug) => {
+                    const failedCount = items.reduce((acc, _, idx) => {
+                      const r = (results[idx] || []).find((x) => x.vendorSlug === slug);
+                      return acc + (!r || !r.productName || r.error ? 1 : 0);
+                    }, 0);
+                    return (
+                      <TableHead key={slug} className="min-w-[250px] text-center">
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>{slug}</span>
+                          {onVendorRefresh && failedCount > 0 && (
+                            <button
+                              onClick={() => onVendorRefresh(slug)}
+                              title={`Re-run ${failedCount} failed cell${failedCount === 1 ? "" : "s"} for ${slug}`}
+                              className="inline-flex items-center justify-center h-5 w-5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
               </TableHeader>
               <TableBody>
