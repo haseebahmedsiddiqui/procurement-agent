@@ -120,6 +120,7 @@ export default function HomePage() {
   }>>>({});
   const [internalMatches, setInternalMatches] = useState<Record<number, {
     primary: {
+      id: string;
       itemCode: string;
       description: string;
       unitOfMeasure: string;
@@ -156,6 +157,8 @@ export default function HomePage() {
   summaryRef.current = searchSummary;
   const selectedVendorsRef = useRef(selectedVendors);
   selectedVendorsRef.current = selectedVendors;
+  const internalMatchesRef = useRef(internalMatches);
+  internalMatchesRef.current = internalMatches;
 
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistInFlightRef = useRef(false);
@@ -260,21 +263,58 @@ export default function HomePage() {
             items?: Array<{
               itemIndex: number;
               results: Array<Record<string, unknown>>;
+              internalMatch?: {
+                inventoryItemId?: string;
+                itemCode?: string;
+                description?: string;
+                unitOfMeasure?: string;
+                rank?: "A" | "B" | "C" | "D" | "E" | null;
+                derivedUnitCost?: number | null;
+                isActive?: boolean;
+                pyrUnits?: number;
+                pyrSalesUsd?: number;
+                confidence?: number;
+                reasoning?: string;
+              } | null;
             }>;
           }>;
           const latest = runs[runs.length - 1];
           if (latest) {
             currentRunIdRef.current = latest.id;
-            // Rebuild searchResults keyed by itemIndex
+            // Rebuild searchResults + internalMatches keyed by itemIndex
             const rebuilt: Record<number, Array<Record<string, unknown>>> = {};
+            const rebuiltInternal: Record<number, {
+              primary: NonNullable<typeof internalMatches[number]["primary"]> | null;
+              confidence: number;
+              reasoning: string;
+            }> = {};
             for (const it of latest.items ?? []) {
               rebuilt[it.itemIndex] = it.results.map((r) => ({
                 ...r,
                 source: r.source ?? "history",
                 durationMs: 0,
               }));
+              if (it.internalMatch?.inventoryItemId) {
+                const im = it.internalMatch;
+                rebuiltInternal[it.itemIndex] = {
+                  primary: {
+                    id: im.inventoryItemId!,
+                    itemCode: im.itemCode ?? "",
+                    description: im.description ?? "",
+                    unitOfMeasure: im.unitOfMeasure ?? "",
+                    rank: im.rank ?? null,
+                    derivedUnitCost: im.derivedUnitCost ?? null,
+                    isActive: !!im.isActive,
+                    pyrUnits: im.pyrUnits ?? 0,
+                    pyrSalesUsd: im.pyrSalesUsd ?? 0,
+                  },
+                  confidence: im.confidence ?? 0,
+                  reasoning: im.reasoning ?? "",
+                };
+              }
             }
             setSearchResults(rebuilt as typeof searchResults);
+            setInternalMatches(rebuiltInternal);
             setSearchSummary({
               totalItems: items.length,
               totalVendors: (latest.vendorSlugs ?? []).length,
@@ -388,6 +428,7 @@ export default function HomePage() {
           runId: currentRunIdRef.current ?? undefined,
           vendorSlugs: Object.values(selectedVendorsRef.current).flat(),
           results: searchResultsRef.current,
+          internalMatches: internalMatchesRef.current,
           summary: {
             totalResults: summaryRef.current.totalResults,
             totalFailures: summaryRef.current.totalFailures,

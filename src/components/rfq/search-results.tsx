@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +69,7 @@ interface ScrapedProduct {
 }
 
 interface InternalMatchPrimary {
+  id: string;
   itemCode: string;
   description: string;
   unitOfMeasure: string;
@@ -138,10 +139,180 @@ export function SearchResults({
   // --- Scraping state ---
   const [scrapingKeys, setScrapingKeys] = useState<Set<string>>(new Set());
 
+  // --- Internal inventory match actions ---
+  // Keyed by itemIndex (one inventory column per row, no vendor dim).
+  type InventoryAction = "confirmed" | "rejected" | "manual";
+  const [inventoryActions, setInventoryActions] = useState<
+    Record<number, InventoryAction>
+  >({});
+  // Manual SKU override for cells where the user picked a different inventory item.
+  const [manualInventoryPicks, setManualInventoryPicks] = useState<
+    Record<number, InternalMatchPrimary>
+  >({});
+  // Which row is currently showing the inventory picker popover.
+  const [skuPickerForIndex, setSkuPickerForIndex] = useState<number | null>(null);
+  const [skuPickerQuery, setSkuPickerQuery] = useState("");
+  const [skuPickerResults, setSkuPickerResults] = useState<InternalMatchPrimary[]>([]);
+  const [skuPickerLoading, setSkuPickerLoading] = useState(false);
+
   // --- Save / Export ---
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  // ---------- inventory feedback helpers ----------
+
+  // Debounced live search for the SKU picker popover
+  useEffect(() => {
+    if (skuPickerForIndex === null) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const q = skuPickerQuery.trim();
+      setSkuPickerLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (q) params.set("q", q);
+        params.set("active", "true");
+        params.set("limit", "8");
+        const res = await fetch(`/api/inventory?${params.toString()}`);
+        const data = await res.json();
+        if (cancelled) return;
+        // Map the API shape to InternalMatchPrimary
+        const mapped: InternalMatchPrimary[] = (data.items || []).map(
+          (it: {
+            id: string;
+            itemCode: string;
+            description: string;
+            unitOfMeasure: string;
+            rank: "A" | "B" | "C" | "D" | "E" | null;
+            derivedUnitCost: number | null;
+            isActive: boolean;
+            salesPyr?: { units?: number; salesUsd?: number } | null;
+          }) => ({
+            id: it.id,
+            itemCode: it.itemCode,
+            description: it.description,
+            unitOfMeasure: it.unitOfMeasure,
+            rank: it.rank,
+            derivedUnitCost: it.derivedUnitCost,
+            isActive: it.isActive,
+            pyrUnits: it.salesPyr?.units ?? 0,
+            pyrSalesUsd: it.salesPyr?.salesUsd ?? 0,
+          })
+        );
+        setSkuPickerResults(mapped);
+      } catch {
+        // Non-fatal; popover just shows no results
+      } finally {
+        if (!cancelled) setSkuPickerLoading(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [skuPickerForIndex, skuPickerQuery]);
+
+  const persistInventoryFeedback = async (
+    itemIndex: number,
+    inventoryItemId: string,
+    action: InventoryAction,
+    extra?: { confidence?: number; reason?: string; source?: "auto" | "manual" }
+  ) => {
+    const rfqItem = items[itemIndex];
+    if (!rfqItem) return;
+    const norm = normalizedItems?.find((n) => n.index === itemIndex);
+    try {
+      await fetch("/api/inventory/match-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rfqDescription: rfqItem.description,
+          normalizedName: norm?.normalizedName,
+          impaCode: rfqItem.impaCode,
+          inventoryItemId,
+          action,
+          source: extra?.source ?? "auto",
+          confidence: extra?.confidence,
+          reason: extra?.reason,
+        }),
+      });
+    } catch {
+      toast.error("Failed to save inventory feedback");
+    }
+  };
+
+  const undoInventoryFeedback = async (
+    itemIndex: number,
+    inventoryItemId: string
+  ) => {
+    const rfqItem = items[itemIndex];
+    if (!rfqItem) return;
+    try {
+      const params = new URLSearchParams({
+        rfqDescription: rfqItem.description,
+        inventoryItemId,
+      });
+      await fetch(`/api/inventory/match-feedback?${params.toString()}`, {
+        method: "DELETE",
+      });
+    } catch {
+      // Non-fatal; the action just stays clientside
+    }
+  };
+
+  const confirmInventoryMatch = (itemIndex: number, match: InternalMatch) => {
+    if (!match.primary) return;
+    setInventoryActions((p) => ({ ...p, [itemIndex]: "confirmed" }));
+    persistInventoryFeedback(itemIndex, match.primary.id, "confirmed", {
+      confidence: match.confidence,
+      source: "auto",
+    });
+  };
+
+  const rejectInventoryMatch = (itemIndex: number, match: InternalMatch) => {
+    if (!match.primary) return;
+    setInventoryActions((p) => ({ ...p, [itemIndex]: "rejected" }));
+    persistInventoryFeedback(itemIndex, match.primary.id, "rejected", {
+      confidence: match.confidence,
+      source: "auto",
+    });
+  };
+
+  const clearInventoryAction = (itemIndex: number, primaryId?: string) => {
+    setInventoryActions((p) => {
+      const next = { ...p };
+      delete next[itemIndex];
+      return next;
+    });
+    setManualInventoryPicks((p) => {
+      const next = { ...p };
+      delete next[itemIndex];
+      return next;
+    });
+    if (primaryId) undoInventoryFeedback(itemIndex, primaryId);
+  };
+
+  const openSkuPicker = (itemIndex: number) => {
+    setSkuPickerForIndex(itemIndex);
+    setSkuPickerQuery(items[itemIndex]?.description || "");
+  };
+
+  const closeSkuPicker = () => {
+    setSkuPickerForIndex(null);
+    setSkuPickerQuery("");
+    setSkuPickerResults([]);
+  };
+
+  const pickManualSku = (itemIndex: number, pick: InternalMatchPrimary) => {
+    setManualInventoryPicks((p) => ({ ...p, [itemIndex]: pick }));
+    setInventoryActions((p) => ({ ...p, [itemIndex]: "manual" }));
+    persistInventoryFeedback(itemIndex, pick.id, "manual", {
+      source: "manual",
+    });
+    closeSkuPicker();
+    toast.success(`Linked ${pick.itemCode}`);
+  };
 
   // ---------- helpers ----------
 
@@ -418,8 +589,102 @@ export function SearchResults({
 
   function renderInternalCell(
     match: InternalMatch | undefined,
-    cheapestVendorPrice: number | null
+    cheapestVendorPrice: number | null,
+    itemIndex: number
   ) {
+    const action = inventoryActions[itemIndex];
+    const manualPick = manualInventoryPicks[itemIndex];
+
+    // 1. Manual-pick view — overrides any auto-match
+    if (manualPick && action === "manual") {
+      return (
+        <div className="rounded-lg p-2.5 -m-1 space-y-1.5 text-left ring-1 ring-primary/40 bg-primary/[0.06]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-mono text-xs font-semibold">{manualPick.itemCode}</span>
+            <Badge className="text-[9px] h-4 bg-primary/15 text-primary">Manual</Badge>
+          </div>
+          {manualPick.description && (
+            <p className="text-xs leading-snug line-clamp-2" title={manualPick.description}>
+              {manualPick.description}
+            </p>
+          )}
+          {manualPick.derivedUnitCost !== null && (
+            <span className="font-bold text-sm tabular-nums">
+              ${manualPick.derivedUnitCost.toFixed(2)}
+              <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                / {manualPick.unitOfMeasure || "unit"}
+              </span>
+            </span>
+          )}
+          <button
+            className="text-[10px] text-muted-foreground hover:text-foreground underline"
+            onClick={() => clearInventoryAction(itemIndex, manualPick.id)}
+          >
+            Undo
+          </button>
+        </div>
+      );
+    }
+
+    // 2. SKU picker popover (replaces normal cell content when open)
+    if (skuPickerForIndex === itemIndex) {
+      return (
+        <div className="rounded-lg p-2 -m-1 space-y-2 ring-1 ring-primary/30 bg-background">
+          <input
+            autoFocus
+            type="text"
+            value={skuPickerQuery}
+            placeholder="Search inventory by code or description…"
+            onChange={(e) => setSkuPickerQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                closeSkuPicker();
+              }
+            }}
+            className="w-full text-[11px] rounded border border-input bg-background px-2 py-1.5 outline-none focus:border-primary"
+          />
+          <div className="max-h-40 overflow-y-auto space-y-1">
+            {skuPickerLoading ? (
+              <div className="flex items-center justify-center py-3">
+                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/60" />
+              </div>
+            ) : skuPickerResults.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground text-center py-2">
+                {skuPickerQuery.trim() ? "No matches" : "Type to search"}
+              </p>
+            ) : (
+              skuPickerResults.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => pickManualSku(itemIndex, r)}
+                  className="w-full text-left rounded border border-transparent hover:border-primary/30 hover:bg-accent px-2 py-1.5 text-[11px] transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono font-semibold">{r.itemCode}</span>
+                    {r.derivedUnitCost !== null && (
+                      <span className="tabular-nums text-foreground">
+                        ${r.derivedUnitCost.toFixed(2)}/{r.unitOfMeasure || "EA"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-muted-foreground line-clamp-1 text-[10px]">
+                    {r.description}
+                    {r.rank && <span className="ml-1.5">[{r.rank}]</span>}
+                  </p>
+                </button>
+              ))
+            )}
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={closeSkuPicker}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     if (!match) {
       return (
         <div className="flex items-center justify-center py-2">
@@ -428,20 +693,29 @@ export function SearchResults({
       );
     }
 
+    // 3. No-match cell — still let the user pick manually
     if (!match.primary || match.confidence < 0.4) {
       return (
-        <span className="text-xs text-muted-foreground" title={match.reasoning}>
-          —
-        </span>
+        <div className="flex flex-col items-center gap-1.5 py-1">
+          <span className="text-xs text-muted-foreground" title={match.reasoning}>
+            —
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px] px-2 gap-1 text-primary"
+            onClick={() => openSkuPicker(itemIndex)}
+          >
+            <Plus className="h-3 w-3" />
+            Pick SKU
+          </Button>
+        </div>
       );
     }
 
     const p = match.primary;
     const isStrong = match.confidence >= 0.7;
     const muted = !p.isActive;
-
-    // Cost-deviation flag: vendor price more than 30% above the historical
-    // unit cost is a useful negotiating signal.
     const overpaying =
       p.derivedUnitCost && cheapestVendorPrice
         ? cheapestVendorPrice / p.derivedUnitCost - 1
@@ -452,7 +726,9 @@ export function SearchResults({
         className={cn(
           "rounded-lg p-2.5 -m-1 space-y-1.5 text-left",
           isStrong ? "ring-1 ring-primary/40 bg-primary/[0.04]" : "ring-1 ring-amber-300/40 bg-amber-50/40",
-          muted && "opacity-70"
+          action === "confirmed" && "ring-2 ring-emerald-400/60 bg-emerald-50/50",
+          action === "rejected" && "bg-muted/50 opacity-50",
+          muted && action !== "confirmed" && "opacity-70"
         )}
       >
         <div className="flex items-center justify-between gap-2">
@@ -489,13 +765,59 @@ export function SearchResults({
             </Badge>
           )}
         </div>
-        {overpaying !== null && overpaying > 0.3 && (
+        {overpaying !== null && overpaying > 0.3 && action !== "rejected" && (
           <p className="text-[10px] font-medium text-amber-700">
             Vendor +{Math.round(overpaying * 100)}% vs historical
           </p>
         )}
-        {!p.isActive && (
+        {!p.isActive && action !== "rejected" && (
           <p className="text-[10px] text-muted-foreground italic">dormant SKU</p>
+        )}
+
+        {/* Action buttons */}
+        {!action ? (
+          <div className="flex gap-1 pt-0.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px] px-2 gap-1"
+              onClick={() => confirmInventoryMatch(itemIndex, match)}
+            >
+              <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+              Confirm
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[10px] px-2 gap-1 text-destructive"
+              onClick={() => rejectInventoryMatch(itemIndex, match)}
+            >
+              <XCircle className="h-3 w-3" />
+              Reject
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[10px] px-2 gap-1 text-muted-foreground"
+              onClick={() => openSkuPicker(itemIndex)}
+              title="Pick a different SKU from inventory"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+          </div>
+        ) : (
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-[10px] cursor-pointer",
+              action === "confirmed"
+                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                : "bg-destructive/10 text-destructive border-destructive/30"
+            )}
+            onClick={() => clearInventoryAction(itemIndex, p.id)}
+          >
+            {action === "confirmed" ? "Confirmed" : "Rejected"} (undo)
+          </Badge>
         )}
       </div>
     );
@@ -816,7 +1138,7 @@ export function SearchResults({
                         </div>
                       </TableCell>
                       <TableCell className="align-top">
-                        {renderInternalCell(inv, cheapestVendorPrice)}
+                        {renderInternalCell(inv, cheapestVendorPrice, idx)}
                       </TableCell>
                       {vendorSlugs.map((slug) => {
                         const vr = itemResults.find((r) => r.vendorSlug === slug);

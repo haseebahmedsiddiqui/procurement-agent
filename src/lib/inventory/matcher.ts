@@ -1,6 +1,8 @@
 import { z } from "zod";
+import type { Types } from "mongoose";
 import { connectDB } from "@/lib/db/connection";
 import { InventoryItem } from "@/lib/db/models/InventoryItem";
+import { InventoryMatchFeedback } from "@/lib/db/models/InventoryMatchFeedback";
 import { getAIClient, MODELS } from "@/lib/ai/client";
 import { recordAICost } from "@/lib/ai/cost-tracker";
 import { logger } from "@/lib/logger";
@@ -46,62 +48,120 @@ const TextRankSchema = z.object({
 export async function matchInventoryItem(input: {
   rfqDescription: string;
   normalizedName: string;
+  impaCode?: string;
   ownerId?: string | null;
 }): Promise<InventoryMatchResult> {
   await connectDB();
+  const ownerId = input.ownerId ?? null;
 
-  // Search both rfqDescription and the AI-normalized name — improves recall.
+  // ---- Step 0: short-circuit on prior user feedback for this RFQ line ----
+  // Look up confirmed / manual decisions first — if found, return that SKU
+  // immediately at confidence 1.0 without an AI call. Also collect any
+  // "rejected" SKUs so we can filter them out of the candidate set below.
+  const feedback = await InventoryMatchFeedback.find({
+    ownerId,
+    $or: [
+      { rfqDescription: input.rfqDescription },
+      ...(input.impaCode ? [{ impaCode: input.impaCode }] : []),
+    ],
+  }).lean();
+
+  const approvedFeedback = feedback.find(
+    (f) => f.action === "confirmed" || f.action === "manual"
+  );
+
+  if (approvedFeedback) {
+    const item = await InventoryItem.findById(
+      approvedFeedback.inventoryItemId
+    ).lean();
+    if (item) {
+      logger.info(
+        {
+          rfqDescription: input.rfqDescription,
+          itemCode: approvedFeedback.itemCode,
+          source: approvedFeedback.action,
+        },
+        "Inventory match short-circuited from feedback"
+      );
+      return {
+        primary: docToCandidate(item),
+        confidence: 1.0,
+        reasoning: `Previously ${approvedFeedback.action} for this RFQ line`,
+        alternates: [],
+      };
+    }
+    // Feedback referenced a SKU that no longer exists — fall through to fresh match.
+  }
+
+  const rejectedIds = new Set(
+    feedback
+      .filter((f) => f.action === "rejected")
+      .map((f) => String(f.inventoryItemId))
+  );
+
+  // ---- Step 1: text search candidates ----
   const query = `${input.rfqDescription} ${input.normalizedName}`.trim();
   if (!query) return emptyResult();
 
-  // Mongo text index on InventoryItem.description. Active items only;
-  // dormant SKUs would create noise. Masked items already excluded.
   const filter: Record<string, unknown> = {
     $text: { $search: query },
     isMasked: false,
     isActive: true,
+    ownerId,
   };
-  if (input.ownerId !== undefined) filter.ownerId = input.ownerId ?? null;
 
-  const docs = await InventoryItem.find(filter, {
+  // Pull a few extra in case some are filtered out as rejected.
+  const fetchLimit = rejectedIds.size > 0 ? 8 + rejectedIds.size : 8;
+  const rawDocs = await InventoryItem.find(filter, {
     score: { $meta: "textScore" },
   })
     .sort({ score: { $meta: "textScore" } })
-    .limit(8)
+    .limit(fetchLimit)
     .lean();
+
+  // Drop rejected SKUs from the candidate set
+  const docs = rawDocs.filter(
+    (d) => !rejectedIds.has(String((d as { _id: Types.ObjectId })._id))
+  );
 
   if (docs.length === 0) {
     return emptyResult();
   }
 
-  const candidates: InventoryMatchCandidate[] = docs.map((d) => ({
-    id: String(d._id),
-    itemCode: d.itemCode as string,
-    description: d.description as string,
-    unitOfMeasure: (d.unitOfMeasure as string) || "",
-    rank: (d.rank as InventoryMatchCandidate["rank"]) ?? null,
-    derivedUnitCost: (d.derivedUnitCost as number | null) ?? null,
-    isActive: Boolean(d.isActive),
-    lastSaleDate: d.lastSaleDate ? new Date(d.lastSaleDate as Date) : null,
-    pyrUnits: (d.sales as { pyr?: { units?: number } } | undefined)?.pyr?.units ?? 0,
-    pyrSalesUsd:
-      (d.sales as { pyr?: { salesUsd?: number } } | undefined)?.pyr?.salesUsd ?? 0,
-  }));
+  const candidates: InventoryMatchCandidate[] = docs.map(docToCandidate);
 
-  // Fast path: a single candidate or a clear winner by text score.
+  // ---- Step 2: AI re-rank ----
   if (candidates.length === 1) {
     return await aiScore(input.rfqDescription, candidates);
   }
 
-  // If the top text-score is far above the rest, trust it directly.
   const topScore = (docs[0] as { score?: number }).score ?? 0;
   const secondScore = (docs[1] as { score?: number }).score ?? 0;
   if (topScore > 0 && secondScore > 0 && topScore / secondScore > 2.5) {
-    // Strong signal — still ask the LLM but only over top 3 (cheaper prompt).
     return await aiScore(input.rfqDescription, candidates.slice(0, 3));
   }
 
   return await aiScore(input.rfqDescription, candidates.slice(0, 5));
+}
+
+function docToCandidate(
+  d: Record<string, unknown> | null | undefined
+): InventoryMatchCandidate {
+  const doc = d ?? {};
+  return {
+    id: String((doc as { _id: Types.ObjectId })._id),
+    itemCode: (doc.itemCode as string) ?? "",
+    description: (doc.description as string) ?? "",
+    unitOfMeasure: (doc.unitOfMeasure as string) || "",
+    rank: (doc.rank as InventoryMatchCandidate["rank"]) ?? null,
+    derivedUnitCost: (doc.derivedUnitCost as number | null) ?? null,
+    isActive: Boolean(doc.isActive),
+    lastSaleDate: doc.lastSaleDate ? new Date(doc.lastSaleDate as Date) : null,
+    pyrUnits:
+      (doc.sales as { pyr?: { units?: number } } | undefined)?.pyr?.units ?? 0,
+    pyrSalesUsd:
+      (doc.sales as { pyr?: { salesUsd?: number } } | undefined)?.pyr?.salesUsd ?? 0,
+  };
 }
 
 function emptyResult(): InventoryMatchResult {

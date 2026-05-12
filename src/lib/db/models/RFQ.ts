@@ -29,10 +29,28 @@ const vendorResultSchema = new Schema(
   { _id: false }
 );
 
+const internalMatchSchema = new Schema(
+  {
+    inventoryItemId: { type: Schema.Types.ObjectId, ref: "InventoryItem" },
+    itemCode: { type: String },
+    description: { type: String },
+    unitOfMeasure: { type: String },
+    rank: { type: String, enum: ["A", "B", "C", "D", "E", null], default: null },
+    derivedUnitCost: { type: Number, default: null },
+    isActive: { type: Boolean, default: false },
+    pyrUnits: { type: Number, default: 0 },
+    pyrSalesUsd: { type: Number, default: 0 },
+    confidence: { type: Number, default: 0 },
+    reasoning: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const searchRunItemSchema = new Schema(
   {
     itemIndex: { type: Number, required: true },
     results: [vendorResultSchema],
+    internalMatch: { type: internalMatchSchema, default: null },
   },
   { _id: false }
 );

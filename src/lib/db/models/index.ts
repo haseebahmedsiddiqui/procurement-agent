@@ -6,3 +6,4 @@ export { RFQ } from "./RFQ";
 export { MatchFeedback } from "./MatchFeedback";
 export { InventoryItem } from "./InventoryItem";
 export { InventoryImport } from "./InventoryImport";
+export { InventoryMatchFeedback } from "./InventoryMatchFeedback";

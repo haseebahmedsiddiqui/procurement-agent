@@ -66,17 +66,30 @@ export async function POST(request: NextRequest) {
             // search. Each item is matched independently and the result is
             // streamed back as soon as it lands. Errors are isolated so a
             // bad match doesn't block vendor search.
-            const inventoryPromise = Promise.allSettled(
+            //
+            // Skip when this is a partial run (resume / per-vendor refresh) —
+            // those flows preserve the existing internal_match in the client
+            // and would lose user edits if we re-emitted from the auto-matcher.
+            const isPartialRun = items.some(
+              (it) =>
+                (it as { restrictVendors?: string[] }).restrictVendors !== undefined
+            );
+            const inventoryPromise = isPartialRun
+              ? Promise.resolve([])
+              : Promise.allSettled(
               items.map(async (item) => {
                 try {
                   const match = await matchInventoryItem({
                     rfqDescription: item.rfqDescription,
                     normalizedName: item.normalizedName,
+                    impaCode: item.impaCode,
                   });
                   emit({
                     type: "internal_match",
                     ts: Date.now(),
                     itemIndex: item.index,
+                    rfqDescription: item.rfqDescription,
+                    impaCode: item.impaCode,
                     primary: match.primary,
                     confidence: match.confidence,
                     reasoning: match.reasoning,

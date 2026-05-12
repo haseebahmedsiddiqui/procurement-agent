@@ -18,6 +18,22 @@ interface VendorResultPayload {
   error?: string;
 }
 
+interface InternalMatchPayload {
+  primary?: {
+    id?: string;
+    itemCode?: string;
+    description?: string;
+    unitOfMeasure?: string;
+    rank?: "A" | "B" | "C" | "D" | "E" | null;
+    derivedUnitCost?: number | null;
+    isActive?: boolean;
+    pyrUnits?: number;
+    pyrSalesUsd?: number;
+  } | null;
+  confidence?: number;
+  reasoning?: string;
+}
+
 interface SaveResultsBody {
   rfqId: string;
   /**
@@ -27,6 +43,8 @@ interface SaveResultsBody {
   runId?: string;
   vendorSlugs: string[];
   results: Record<string, VendorResultPayload[]>;
+  /** Per-item internal inventory matches, keyed by itemIndex (as string). */
+  internalMatches?: Record<string, InternalMatchPayload>;
   summary: {
     totalResults: number;
     totalFailures: number;
@@ -40,29 +58,59 @@ interface SaveResultsBody {
   status?: "running" | "completed" | "cancelled" | "failed";
 }
 
-function buildSearchRunItems(results: SaveResultsBody["results"]) {
-  return Object.entries(results).map(([indexStr, vendorResults]) => ({
-    itemIndex: parseInt(indexStr, 10),
-    results: vendorResults.map((r) => ({
-      vendorSlug: r.vendorSlug,
-      productName: r.productName,
-      productId: r.productId,
-      productUrl: r.productUrl,
-      price: r.price,
-      currency: r.currency,
-      inStock: r.inStock,
-      reviewCount: r.reviewCount,
-      starRating: r.starRating,
-      source: r.source,
-      error: r.error,
-    })),
-  }));
+function buildSearchRunItems(
+  results: SaveResultsBody["results"],
+  internalMatches?: SaveResultsBody["internalMatches"]
+) {
+  // Union of itemIndexes across both inputs so an item with only an internal
+  // match (no vendor results yet) is still persisted.
+  const indexSet = new Set<string>([
+    ...Object.keys(results),
+    ...(internalMatches ? Object.keys(internalMatches) : []),
+  ]);
+
+  return Array.from(indexSet).map((indexStr) => {
+    const vendorResults = results[indexStr] ?? [];
+    const m = internalMatches?.[indexStr];
+    return {
+      itemIndex: parseInt(indexStr, 10),
+      results: vendorResults.map((r) => ({
+        vendorSlug: r.vendorSlug,
+        productName: r.productName,
+        productId: r.productId,
+        productUrl: r.productUrl,
+        price: r.price,
+        currency: r.currency,
+        inStock: r.inStock,
+        reviewCount: r.reviewCount,
+        starRating: r.starRating,
+        source: r.source,
+        error: r.error,
+      })),
+      internalMatch:
+        m && m.primary
+          ? {
+              inventoryItemId: m.primary.id,
+              itemCode: m.primary.itemCode,
+              description: m.primary.description,
+              unitOfMeasure: m.primary.unitOfMeasure,
+              rank: m.primary.rank ?? null,
+              derivedUnitCost: m.primary.derivedUnitCost ?? null,
+              isActive: m.primary.isActive ?? false,
+              pyrUnits: m.primary.pyrUnits ?? 0,
+              pyrSalesUsd: m.primary.pyrSalesUsd ?? 0,
+              confidence: m.confidence ?? 0,
+              reasoning: m.reasoning ?? "",
+            }
+          : null,
+    };
+  });
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as SaveResultsBody;
-    const { rfqId, runId, vendorSlugs, results, summary, status } = body;
+    const { rfqId, runId, vendorSlugs, results, internalMatches, summary, status } = body;
 
     if (!rfqId) {
       return NextResponse.json({ error: "rfqId is required" }, { status: 400 });
@@ -76,7 +124,7 @@ export async function POST(request: NextRequest) {
     }
 
     rfq.searchRuns = rfq.searchRuns || [];
-    const items = buildSearchRunItems(results);
+    const items = buildSearchRunItems(results, internalMatches);
     const finalStatus = status ?? "completed";
     const now = new Date();
 
